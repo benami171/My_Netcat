@@ -6,7 +6,7 @@ CFlags = -Wall -g
 all: ttt
 
 ttt: ttt.o
-	$(CC) $(CFlags) ttt.o -o ttt
+	$(CC) $(CFlags) ttt.o -o ttt -lm
 
 ttt.o:
 	$(CC) $(CFlags) -c ttt.c -o ttt.o
