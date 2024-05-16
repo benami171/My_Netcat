@@ -167,7 +167,18 @@ int main(int argc, char *argv[])
             int move;
             do
             {
-                scanf("%d", &move);
+                if (scanf("%d", &move) != 1)
+                {
+                    printf("Invalid input. Please enter a number between 1 and 9.\n");
+                    scanf("%d", &move);
+                }
+
+                if (move < 1 || move > 9)
+                {
+                    printf("Enter a number between 1 and 9\n");
+                    scanf("%d", &move);
+                }
+
                 int row = (move - 1) / SIZE;
                 int col = (move - 1) % SIZE;
                 if (board[row][col] == 0)
