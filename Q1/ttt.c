@@ -201,6 +201,7 @@ int main(int argc, char *argv[])
         printf("\n");
         turn++;
 
+
         int winner = check_winner(board);
         if (winner != 0)
         {
