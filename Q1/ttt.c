@@ -167,20 +167,30 @@ int main(int argc, char *argv[])
         else
         {
             // User's turn
-            int move = 0;
+            int move;
             do
             {
-                while(scanf("%c", &move) != 1 || move < 1 || move > 9)
+                if (scanf("%d", &move) != 1)
                 {
                     printf("Invalid input. Please enter a number between 1 and 9.\n");
-                    scanf("%d", &move);
+                    while (getchar() != '\n')
+                        ; // clear input buffer
+                    continue;
                 }
 
+                char ch;
+                if ((ch = getchar()) != '\n')
+                {
+                    printf("Invalid input. Please enter only one number at a time.\n");
+                    while (getchar() != '\n')
+                        ; // clear input buffer
+                    continue;
+                }
 
                 if (move < 1 || move > 9)
                 {
                     printf("Enter a number between 1 and 9\n");
-                    scanf("%d", &move);
+                    continue;
                 }
 
                 int row = (move - 1) / SIZE;
@@ -196,11 +206,9 @@ int main(int argc, char *argv[])
                 }
             } while (1);
         }
-
         print_board(board);
         printf("\n");
         turn++;
-
 
         int winner = check_winner(board);
         if (winner != 0)
