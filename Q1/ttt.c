@@ -176,6 +176,7 @@ int main(int argc, char *argv[])
                     scanf("%d", &move);
                 }
 
+
                 if (move < 1 || move > 9)
                 {
                     printf("Enter a number between 1 and 9\n");
