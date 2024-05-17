@@ -1,18 +1,14 @@
-CC = gcc
-CFlags =-Wall 
 
-.PHONY: all clean
+.PHONY: all clean Q1 Q2
 
-all: ttt mync
+all: Q1 Q2 
 
-mync: mync.c
-	$(CC) $(CFLAGS) -o mync mync.c
+Q1:
+	make -C Q1 all
 
-ttt: ttt.o
-	$(CC) $(CFlags) ttt.o -o ttt -lm
-
-ttt.o:
-	$(CC) $(CFlags) -c ttt.c -o ttt.o
+Q2:
+	make -C Q2 all
 
 clean:
-	rm -f *.o ttt mync
+	make -C Q1 clean
+	make -C Q2 clean

@@ -46,11 +46,11 @@ void print_board(int board[SIZE][SIZE])
     {
         for (int j = 0; j < SIZE; j++)
         {
-            if (board[i][j] == 1)
+            if (board[i][j] == 1) // computer
             {
                 printf("X ");
             }
-            else if (board[i][j] == -1)
+            else if (board[i][j] == -1) // player
             {
                 printf("O ");
             }
@@ -136,7 +136,10 @@ int main(int argc, char *argv[])
         return error;
     }
 
+    // initoalizing the board
     int board[SIZE][SIZE] = {0};
+    
+    // getitng the moves from the input
     int cpu_moves[9];
     for (int i = 0; i < 9; i++)
     {
