@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
 
     // initoalizing the board
     int board[SIZE][SIZE] = {0};
-    
+
     // getitng the moves from the input
     int cpu_moves[9];
     for (int i = 0; i < 9; i++)
@@ -168,25 +168,42 @@ int main(int argc, char *argv[])
         {
             // User's turn
             int move;
+            char input[10];
             do
             {
-                if (scanf("%d", &move) != 1)
+                // if (scanf("%d", &move) != 1)
+                // {
+                //     printf("Invalid input. Please enter a number between 1 and 9.\n");
+                //     while (getchar() != '\n')
+                //         ; // clear input buffer
+                //     continue;
+                // }
+
+                // char ch;
+                // if ((ch = getchar()) != '\n')
+                // {
+                //     printf("Invalid input. Please enter only one number at a time.\n");
+                //     while (getchar() != '\n')
+                //         ; // clear input buffer
+                //     continue;
+                // }
+                if (fgets(input, sizeof(input), stdin) == NULL)
+                {
+                    printf("Error reading input. Please try again.\n");
+                    continue;
+                }
+
+                if (input[0] == '\n')
                 {
                     printf("Invalid input. Please enter a number between 1 and 9.\n");
-                    while (getchar() != '\n')
-                        ; // clear input buffer
                     continue;
                 }
 
-                char ch;
-                if ((ch = getchar()) != '\n')
+                if (sscanf(input, "%d", &move) != 1)
                 {
-                    printf("Invalid input. Please enter only one number at a time.\n");
-                    while (getchar() != '\n')
-                        ; // clear input buffer
+                    printf("Invalid input. Please enter a number between 1 and 9.\n");
                     continue;
                 }
-
                 if (move < 1 || move > 9)
                 {
                     printf("Enter a number between 1 and 9\n");
@@ -233,3 +250,4 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+// TODO add fflush(stdout) after every printf to clean the buffer

@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <asm-generic/socket.h>
 
 int main(int argc, char *argv[])
 {
