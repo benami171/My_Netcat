@@ -49,14 +49,17 @@ void print_board(int board[SIZE][SIZE])
             if (board[i][j] == 1) // computer
             {
                 printf("X ");
+                fflush(stdin);
             }
             else if (board[i][j] == -1) // player
             {
                 printf("O ");
+                fflush(stdin);
             }
             else
             {
                 printf(". ");
+                fflush(stdin);
             }
         }
         printf("\n");
@@ -126,6 +129,7 @@ int main(int argc, char *argv[])
     if (argc != 2)
     {
         printf("Usage: %s <number>\n", argv[0]);
+        fflush(stdin);
         return 1;
     }
 
@@ -133,6 +137,7 @@ int main(int argc, char *argv[])
     if (error != 0)
     {
         printf("Error: Invalid input.\n");
+        fflush(stdin);
         return error;
     }
 
@@ -190,23 +195,28 @@ int main(int argc, char *argv[])
                 if (fgets(input, sizeof(input), stdin) == NULL)
                 {
                     printf("Error reading input. Please try again.\n");
+                    fflush(stdin);
+
                     continue;
                 }
 
                 if (input[0] == '\n')
                 {
                     printf("Invalid input. Please enter a number between 1 and 9.\n");
+                    fflush(stdin);
                     continue;
                 }
 
                 if (sscanf(input, "%d", &move) != 1)
                 {
                     printf("Invalid input. Please enter a number between 1 and 9.\n");
+                    fflush(stdin);
                     continue;
                 }
                 if (move < 1 || move > 9)
                 {
                     printf("Enter a number between 1 and 9\n");
+                    fflush(stdin);
                     continue;
                 }
 
@@ -233,10 +243,12 @@ int main(int argc, char *argv[])
             if (winner == 1)
             {
                 printf("I win\n");
+                fflush(stdin);
             }
             else
             {
                 printf("I lost\n");
+                fflush(stdin);
             }
             return 0;
         }
@@ -244,6 +256,7 @@ int main(int argc, char *argv[])
         if (is_full(board))
         {
             printf("DRAW\n");
+            fflush(stdin);
             return 0;
         }
     }
