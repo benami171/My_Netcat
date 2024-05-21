@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
                 if (fgets(input, sizeof(input), stdin) == NULL)
                 {
                     printf("Error reading input. Please try again.\n");
-                    fflush(stdin);
+                    fflush(stdout);
 
                     continue;
                 }
