@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
             else
             {
                 // printf("I lost\n");
-                printf("\033[1;34mI lost blue\033[0m\n");
+                printf("\033[1;34mI lost \033[0m\n");
                 fflush(stdout);
             }
             return 0;
