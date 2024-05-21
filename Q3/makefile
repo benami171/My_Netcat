@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -fprofile-arcs -ftest-coverage
 
 .PHONY: all clean
 
@@ -15,4 +15,4 @@ ttt: ttt.o
 	$(CC) $(CFLAGS) -c $<
 
 clean:
-	rm -f *.o mync ttt
+	rm -f *.o mync ttt *.gcda *.gcno *.gcov

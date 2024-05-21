@@ -108,8 +108,17 @@ int main(int argc, char *argv[])
 
     if (evalue == NULL)
     {
-        fprintf(stderr, "Usage: %s -e \"<program> <arguments>\"\n", argv[0]);
-        exit(EXIT_FAILURE);
+        // fprintf(stderr, "Usage: %s -e \"<program> <arguments>\"\n", argv[0]);
+        // exit(EXIT_FAILURE);
+        if (optind < argc)
+        {
+            evalue = argv[optind];
+        }
+        else
+        {
+            fprintf(stderr, "Usage: %s [-e \"<program> <arguments>\"] or %s \"<program> <arguments>\"\n", argv[0], argv[0]);
+            exit(EXIT_FAILURE);
+        }
     }
 
     // -b cannot be used with -i or -o, not support multiple options
@@ -126,7 +135,7 @@ int main(int argc, char *argv[])
     int sock_output = STDOUT_FILENO;
 
     if (ivalue != NULL)
-    {  
+    {
         // listeing to input form client on local host, and printing to stdout
 
         int port = atoi(ivalue += 4); // taking the port, skipping the first 4 characters TCPSport
@@ -328,27 +337,5 @@ int main(int argc, char *argv[])
     close(sock_output);
     close(sock_input);
 
-    // pid_t pid = fork();
-    // if (pid == 0)
-    // {
-    //     // Child process
-    //     close(pipefd[1]);               // Close unused write end
-    //     dup2(pipefd[0], STDIN_FILENO);  // Redirect standard input to read end of pipe
-    //     execlp("./ttt", "./ttt", NULL); // Execute ttt game
-    //     perror("execlp");
-    //     exit(EXIT_FAILURE);
-    // }
-    // else
-    // {
-    //     // Parent process
-    //     close(pipefd[0]); // Close unused read end
-    //     char buffer[2];
-    //     while (fgets(buffer, sizeof(buffer), stdin))
-    //     {
-    //         write(pipefd[1], buffer, 1); // Write client's input to write end of pipe
-    //     }
-    //     close(pipefd[1]); // Close write end of pipe when done
-    //     wait(NULL);       // Wait for child process to finish
-    // }
     return 0;
 }
