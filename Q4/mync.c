@@ -10,6 +10,8 @@
 #include <getopt.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
+
 void run_program(char *args_as_string)
 {
     // tokenize the string - split by space
@@ -57,6 +59,13 @@ void run_program(char *args_as_string)
     }
 }
 
+void handle_alarm(int sig)
+{
+
+    // Terminate the process
+    exit(0);
+}
+
 // for -i  nc localhost <port>
 // for -o  nc -l -p <port>
 // for -b  nc -l -p <port> | nc localhost <port>
@@ -75,6 +84,7 @@ int main(int argc, char *argv[])
     char *bvalue = NULL;
     char *ivalue = NULL;
     char *ovalue = NULL;
+    char *tvalue = NULL;
 
     // int pipefd[2];
 
@@ -84,7 +94,7 @@ int main(int argc, char *argv[])
     //     exit(EXIT_FAILURE);
     // }
 
-    while ((opt = getopt(argc, argv, "e:b:i:o:")) != -1)
+    while ((opt = getopt(argc, argv, "e:b:i:o:t:")) != -1)
     {
         switch (opt)
         {
@@ -100,11 +110,16 @@ int main(int argc, char *argv[])
         case 'o':
             ovalue = optarg;
             break;
+        case 't':
+            tvalue = optarg;
+            break;
         default:
             fprintf(stderr, "Usage: %s <port>\n", argv[0]);
             exit(EXIT_FAILURE);
         }
     }
+
+    signal(SIGALRM, handle_alarm);
 
     if (evalue == NULL)
     {
@@ -205,8 +220,59 @@ int main(int argc, char *argv[])
             //     write(pipefd[1], buffer, 1);
             // }
         }
-        else if (strcpm(server_kind, "UDPS") == 0){
+        else if (strcmp(server_kind, "UDPS") == 0)
+        {
+            int port = atoi(ivalue += 4);
+            int timeout;
+            if (tvalue != NULL)
+            {
+                timeout = atoi(tvalue);
+            }
+            else
+            {
+                timeout = 0;
+            }
 
+            // open a UDP server to listen to the port
+            int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+            if (sockfd == -1)
+            {
+                perror("error creating socket");
+                return 1;
+            }
+            printf("Socket created\n");
+            struct sockaddr_in server_addr;
+            server_addr.sin_family = AF_INET;
+            server_addr.sin_port = htons(port);
+            server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+            if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+            {
+                perror("error binding socket");
+                return 1;
+            }
+
+            // read the data from the client
+            char buffer[2];
+            struct sockaddr_in client_addr;
+            socklen_t client_addr_len = sizeof(client_addr);
+            do
+            {
+                sock_input = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
+                if (sock_input == -1)
+                {
+                    perror("error receiving data");
+                    return 1;
+                }
+                else
+                {
+                    printf("Received: %s\n", buffer);
+                }
+            } while (sock_input > 0);
+
+            // send the data to the client
+            alarm(timeout);
+            close(sockfd);
         }
     }
 
