@@ -10,6 +10,52 @@
 #include <getopt.h>
 #include <errno.h>
 #include <fcntl.h>
+void run_program(char *args_as_string)
+{
+    // tokenize the string - split by space
+    char *token = strtok(args_as_string, " ");
+
+    if (token == NULL)
+    {
+        fprintf(stderr, "No arguments provided\n");
+        exit(1);
+    }
+    // create an array of strings to store the arguments
+    char **args = (char **)malloc(sizeof(char *));
+    int n = 0;         // number of arguments
+    args[n++] = token; // add the first argument
+
+    // get the rest of the arguments
+    while (token != NULL)
+    {
+        token = strtok(NULL, " ");                               // get the next token (NULL - take the next token from the previous string)
+        args = (char **)realloc(args, (n + 1) * sizeof(char *)); // allocate memory for the new argument
+        args[n++] = token;                                       // add the new argument and increment the number of arguments
+    }
+
+    // fork and execute the program
+    int fd = fork();
+    if (fd < 0)
+    { // fork failed
+        fprintf(stderr, "Fork failed\n");
+        exit(1);
+    }
+
+    if (fd == 0)
+    { // child process
+        execvp(args[0], args);
+        fprintf(stderr, "Exec failed\n");
+        free(args);
+        exit(1);
+    }
+    else
+    {
+        wait(NULL); // wait for the child process to finish
+        // free the memory
+        free(args);
+        fflush(stdout);
+    }
+}
 
 // for -i  nc localhost <port>
 // for -o  nc -l -p <port>
@@ -30,13 +76,13 @@ int main(int argc, char *argv[])
     char *ivalue = NULL;
     char *ovalue = NULL;
 
-    int pipefd[2];
+    // int pipefd[2];
 
-    if (pipe(pipefd) == -1)
-    {
-        perror("pipe");
-        exit(EXIT_FAILURE);
-    }
+    // if (pipe(pipefd) == -1)
+    // {
+    //     perror("pipe");
+    //     exit(EXIT_FAILURE);
+    // }
 
     while ((opt = getopt(argc, argv, "e:b:i:o")) != -1)
     {
@@ -276,29 +322,30 @@ int main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
     }
+    run_program(evalue);
 
-    pid_t pid = fork();
-    if (pid == 0)
-    {
-        // Child process
-        close(pipefd[1]);               // Close unused write end
-        dup2(pipefd[0], STDIN_FILENO);  // Redirect standard input to read end of pipe
-        execlp("./ttt", "./ttt", NULL); // Execute ttt game
-        perror("execlp");
-        exit(EXIT_FAILURE);
-    }
-    else
-    {
-        // Parent process
-        close(pipefd[0]); // Close unused read end
-        char buffer[2];
-        while (fgets(buffer, sizeof(buffer), stdin))
-        {
-            write(pipefd[1], buffer, 1); // Write client's input to write end of pipe
-        }
-        close(pipefd[1]); // Close write end of pipe when done
-        wait(NULL);       // Wait for child process to finish
-    }
+    // pid_t pid = fork();
+    // if (pid == 0)
+    // {
+    //     // Child process
+    //     close(pipefd[1]);               // Close unused write end
+    //     dup2(pipefd[0], STDIN_FILENO);  // Redirect standard input to read end of pipe
+    //     execlp("./ttt", "./ttt", NULL); // Execute ttt game
+    //     perror("execlp");
+    //     exit(EXIT_FAILURE);
+    // }
+    // else
+    // {
+    //     // Parent process
+    //     close(pipefd[0]); // Close unused read end
+    //     char buffer[2];
+    //     while (fgets(buffer, sizeof(buffer), stdin))
+    //     {
+    //         write(pipefd[1], buffer, 1); // Write client's input to write end of pipe
+    //     }
+    //     close(pipefd[1]); // Close write end of pipe when done
+    //     wait(NULL);       // Wait for child process to finish
+    // }
     return 0;
 }
 /**
