@@ -12,7 +12,7 @@
 #include <fcntl.h>
 #include <signal.h>
 
-void run_program(char *args_as_string)
+void RUN(char *args_as_string)
 {
     // tokenize the string - split by space
     char *token = strtok(args_as_string, " ");
@@ -281,52 +281,109 @@ int main(int argc, char *argv[])
 
     if (ovalue != NULL) // changin the output to the one who we're addressing
     {
-        ovalue += 4;                           // skip the "TCPC" prefix
-        char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
-        if (ip_server == NULL)
-        {
-            fprintf(stderr, "Invalid server IP\n");
-            exit(1);
-        }
-        // get the rest of the string after the comma, this is the port
-        char *port_server = strtok(NULL, ",");
-        if (port_server == NULL)
-        {
-            fprintf(stderr, "Invalid server port\n");
-            exit(1);
-        }
-        int port = atoi(port_server); // converting the port to integer
 
-        // open a TCP client to the server
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock == -1)
+        char server_kind[4] = {0};
+        strncpy(server_kind, ovalue, 4); // copying the first 4 characters to the server_kind
+        if (strcmp(server_kind, "TCPC") == 0)
         {
-            perror("error creating socket");
-            return 1;
-        }
-
-        struct sockaddr_in server_addr;
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_port = htons(port);
-
-        if (inet_pton(AF_INET, ip_server, &server_addr.sin_addr) <= 0)
-        {
-            perror("Invalid address/ Address not supported");
-            return 1;
-        }
-
-        // connecting to the server
-        if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-        {
-            perror("error connecting to server");
-            if (sock_input != STDIN_FILENO) // to ensure we'rent getting input from another place
+            ovalue += 4;                           // skip the "TCPC" prefix
+            char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
+            if (ip_server == NULL)
             {
-                close(sock_input);
+                fprintf(stderr, "Invalid server IP\n");
+                exit(1);
             }
-            return 1;
+            // get the rest of the string after the comma, this is the port
+            char *port_server = strtok(NULL, ",");
+            if (port_server == NULL)
+            {
+                fprintf(stderr, "Invalid server port\n");
+                exit(1);
+            }
+            int port = atoi(port_server); // converting the port to integer
+
+            // open a TCP client to the server
+            int sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (sock == -1)
+            {
+                perror("error creating socket");
+                return 1;
+            }
+
+            struct sockaddr_in server_addr;
+            server_addr.sin_family = AF_INET;
+            server_addr.sin_port = htons(port);
+
+            if (inet_pton(AF_INET, ip_server, &server_addr.sin_addr) <= 0)
+            {
+                perror("Invalid address/ Address not supported");
+                return 1;
+            }
+
+            // connecting to the server
+            if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+            {
+                perror("error connecting to server");
+                if (sock_input != STDIN_FILENO) // to ensure we'rent getting input from another place
+                {
+                    close(sock_input);
+                }
+                return 1;
+            }
+
+            sock_output = sock; // changin the output to form the socket to the client
         }
 
-        sock_output = sock; // changin the output to form the socket to the client
+        else if (strcmp(server_kind, "UDPC") == 0) // creating UDP client
+        {
+            // getting the server-ip and port to for this
+            ovalue += 4;                           // skip the "TCPC" prefix
+            char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
+            if (ip_server == NULL)
+            {
+                fprintf(stderr, "Invalid server IP\n");
+                exit(1);
+            }
+            // get the rest of the string after the comma, this is the port
+            char *port_server = strtok(NULL, ",");
+            if (port_server == NULL)
+            {
+                fprintf(stderr, "Invalid server port\n");
+                exit(1);
+            }
+
+            int port = atoi(port_server); // converting the port to integer
+            struct sockaddr_in servaddr;
+
+            // clear servaddr
+            bzero(&servaddr, sizeof(servaddr));
+            servaddr.sin_addr.s_addr = inet_addr(ip_server);
+            servaddr.sin_port = htons(port);
+            servaddr.sin_family = AF_INET;
+
+            int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+            if (sockfd == -1)
+            {
+                perror("socket");
+                exit(0);
+            }
+
+            // connect to server
+            if (sendto() == -1)
+            {
+                perror("sendto");
+                if (sock_input != STDIN_FILENO)
+                {
+                    close(sock_input);
+                }
+                return 1;
+            }
+            sock_output = sockfd; // changin the output to form the socket to the client
+        }
+
+        // if(sendto(sockfd, message, MAXLINE, 0, (struct sockaddr*)NULL, sizeof(servaddr))){
+
+        // }
     }
 
     if (bvalue != NULL)
@@ -413,7 +470,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    run_program(evalue);
+    RUN(evalue); // this getting the whole char of command to run
     close(sock_output);
     close(sock_input);
 

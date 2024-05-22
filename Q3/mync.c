@@ -10,7 +10,7 @@
 #include <getopt.h>
 #include <errno.h>
 #include <fcntl.h>
-void run_program(char *args_as_string)
+void RUN(char *args_as_string)
 {
     // tokenize the string - split by space
     char *token = strtok(args_as_string, " ");
@@ -333,7 +333,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    run_program(evalue);
+    RUN(evalue);
     close(sock_output);
     close(sock_input);
 
