@@ -244,8 +244,10 @@ int main(int argc, char *argv[])
             // if not set, the port will be in use for 2 minutes after the program ends
             int enable = 1;
             if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+            {
                 perror("setsockopt(SO_REUSEADDR) failed");
-
+                return 1;
+            }
             struct sockaddr_in server_addr;
             server_addr.sin_family = AF_INET;
             server_addr.sin_port = htons(port);
@@ -314,6 +316,12 @@ int main(int argc, char *argv[])
             server_addr.sin_family = AF_INET;
             server_addr.sin_port = htons(port);
 
+            if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0)
+            {
+                perror("setsockopt");
+                return 1;
+            }
+
             if (inet_pton(AF_INET, ip_server, &server_addr.sin_addr) <= 0)
             {
                 perror("Invalid address/ Address not supported");
@@ -356,10 +364,7 @@ int main(int argc, char *argv[])
             struct sockaddr_in servaddr;
 
             // clear servaddr
-            bzero(&servaddr, sizeof(servaddr));
-            servaddr.sin_addr.s_addr = inet_addr(ip_server);
-            servaddr.sin_port = htons(port);
-            servaddr.sin_family = AF_INET;
+            memset(&servaddr, 0, sizeof(servaddr));
 
             int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
             if (sockfd == -1)
@@ -368,22 +373,46 @@ int main(int argc, char *argv[])
                 exit(0);
             }
 
-            // connect to server
-            if (sendto() == -1)
+            if (inet_pton(AF_INET, ip_server, &servaddr.sin_addr) <= 0)
             {
-                perror("sendto");
-                if (sock_input != STDIN_FILENO)
-                {
-                    close(sock_input);
-                }
+                perror("inet_pton");
                 return 1;
             }
+
+            servaddr.sin_family = AF_INET;
+            servaddr.sin_addr.s_addr = inet_addr(ip_server);
+            servaddr.sin_port = htons(port);
+
+            if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0)
+            {
+                perror("setsockopt");
+                return 1;
+            }
+
+            // send the data to the server
+            // char buffer[2];
+            // // cleaning the buffer
+            // memset(buffer, 0, sizeof(buffer));
+            // if (sendto(sockfd, buffer, 2, 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
+            // {
+            //     perror("error sending data");
+            //     return 1;
+            // }
+
+            char buffer[1024];
+            ssize_t bytes_read;
+            while ((bytes_read = read(sock_input, buffer, sizeof(buffer) - 1)) > 0)
+            {
+                buffer[bytes_read] = '\0'; // null terminate the string
+                if (sendto(sockfd, buffer, bytes_read, 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
+                {
+                    perror("sendto");
+                    return 1;
+                }
+            }
+
             sock_output = sockfd; // changin the output to form the socket to the client
         }
-
-        // if(sendto(sockfd, message, MAXLINE, 0, (struct sockaddr*)NULL, sizeof(servaddr))){
-
-        // }
     }
 
     if (bvalue != NULL)
