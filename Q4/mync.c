@@ -257,16 +257,23 @@ int main(int argc, char *argv[])
                 return 1;
             }
 
+            // to start showing the game before we're sending to ourself an ack to show the first move
+            if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+            {
+                perror("error sending ACK");
+                return 1;
+            }
+
             // read the data from the client
             char buffer[2];
             struct sockaddr_in client_addr;
             socklen_t client_addr_len = sizeof(client_addr);
-                int numbytes = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
-                if (numbytes == -1)
-                {
-                    perror("error receiving data");
-                    return 1;
-                }
+            int numbytes = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
+            if (numbytes == -1)
+            {
+                perror("error receiving data");
+                return 1;
+            }
             sock_input = sockfd; // changing the descriptor to be the socket
             alarm(timeout);
         }
