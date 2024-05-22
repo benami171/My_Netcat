@@ -151,11 +151,13 @@ int main(int argc, char *argv[])
 
     if (ivalue != NULL)
     {
+        printf("got i value\n");
         // -i TCPS<port> or UDPS<port>
         // Now need to decied if to open TCP server or UDP server
         // first need to check the demand
         char server_kind[4] = {0};
         strncpy(server_kind, ivalue, 4); // copying the first 4 characters to the server_kind
+        printf("server_kind: %s\n", server_kind);
         if (strcmp(server_kind, "TCPS") == 0)
         {
             // listeing to input form client on local host, and printing to stdout
@@ -222,6 +224,7 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(server_kind, "UDPS") == 0)
         {
+            printf(" i value UDP server\n");
             int port = atoi(ivalue += 4);
             int timeout;
             if (tvalue != NULL)
@@ -283,11 +286,14 @@ int main(int argc, char *argv[])
 
     if (ovalue != NULL) // changin the output to the one who we're addressing
     {
+        printf("got o value\n");
 
         char server_kind[4] = {0};
         strncpy(server_kind, ovalue, 4); // copying the first 4 characters to the server_kind
+        printf("server_kind: %s\n", server_kind);
         if (strcmp(server_kind, "TCPC") == 0)
         {
+            printf("TCP client\n");
             ovalue += 4;                           // skip the "TCPC" prefix
             char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
             if (ip_server == NULL)
@@ -344,6 +350,7 @@ int main(int argc, char *argv[])
 
         else if (strcmp(server_kind, "UDPC") == 0) // creating UDP client
         {
+            printf("UDP client\n"  );
             // getting the server-ip and port to for this
             ovalue += 4;                           // skip the "TCPC" prefix
             char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
@@ -367,6 +374,7 @@ int main(int argc, char *argv[])
             memset(&servaddr, 0, sizeof(servaddr));
 
             int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+            printf("1.sockfd: %d\n", sockfd);
             if (sockfd == -1)
             {
                 perror("socket");
@@ -388,7 +396,7 @@ int main(int argc, char *argv[])
                 perror("setsockopt");
                 return 1;
             }
-
+            
             // send the data to the server
             // char buffer[2];
             // // cleaning the buffer
@@ -403,6 +411,7 @@ int main(int argc, char *argv[])
             ssize_t bytes_read;
             while ((bytes_read = read(sock_input, buffer, sizeof(buffer) - 1)) > 0)
             {
+                printf("reading from input\n");
                 buffer[bytes_read] = '\0'; // null terminate the string
                 if (sendto(sockfd, buffer, bytes_read, 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
                 {
@@ -412,6 +421,7 @@ int main(int argc, char *argv[])
             }
 
             sock_output = sockfd; // changin the output to form the socket to the client
+            printf("sock_output: %d\n", sock_output);
         }
     }
 
@@ -485,8 +495,10 @@ int main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
     }
+
     if (sock_output != STDOUT_FILENO)
     {
+        printf(" DOING DUP TO OUTPUT");
         if (dup2(sock_output, STDOUT_FILENO) == -1)
         {
             close(sock_output);
