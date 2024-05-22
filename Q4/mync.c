@@ -232,7 +232,6 @@ int main(int argc, char *argv[])
             {
                 timeout = 0;
             }
-
             // open a UDP server to listen to the port
             int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
             if (sockfd == -1)
@@ -240,7 +239,13 @@ int main(int argc, char *argv[])
                 perror("error creating socket");
                 return 1;
             }
-            printf("Socket created\n");
+            printf("UDP Socket created\n");
+
+            // if not set, the port will be in use for 2 minutes after the program ends
+            int enable = 1;
+            if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+                perror("setsockopt(SO_REUSEADDR) failed");
+
             struct sockaddr_in server_addr;
             server_addr.sin_family = AF_INET;
             server_addr.sin_port = htons(port);
@@ -256,23 +261,14 @@ int main(int argc, char *argv[])
             char buffer[2];
             struct sockaddr_in client_addr;
             socklen_t client_addr_len = sizeof(client_addr);
-            do
-            {
-                sock_input = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
-                if (sock_input == -1)
+                int numbytes = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
+                if (numbytes == -1)
                 {
                     perror("error receiving data");
                     return 1;
                 }
-                else
-                {
-                    printf("Received: %s\n", buffer);
-                }
-            } while (sock_input > 0);
-
-            // send the data to the client
+            sock_input = sockfd; // changing the descriptor to be the socket
             alarm(timeout);
-            close(sockfd);
         }
     }
 
