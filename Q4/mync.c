@@ -59,6 +59,18 @@ void RUN(char *args_as_string)
     }
 }
 
+void sockets_terminator(int *descriptors)
+{
+    if (descriptors[0] != STDIN_FILENO)
+    {
+        close(descriptors[0]);
+    }
+    if (descriptors[1] != STDOUT_FILENO)
+    {
+        close(descriptors[1]);
+    }
+}
+
 void handle_alarm(int sig)
 {
 
@@ -86,16 +98,9 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag)
     }
 
     struct sockaddr_in server_addr;
-    // memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // listen to any address
-
-    // if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0)
-    // {
-    //     perror("inet_pton");
-    //     exit(EXIT_FAILURE);
-    // }
 
     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
@@ -114,68 +119,18 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag)
     socklen_t client_len = sizeof(client_addr);
 
     // chanigng the input_fd to the new socket after accepting the connection
-    int new_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
-    if (new_fd < 0)
+    int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
+    if (client_fd < 0)
     {
         perror("accept");
         exit(EXIT_FAILURE);
     }
 
-    descriptors[0] = new_fd;
+    descriptors[0] = client_fd;
     if (b_flag != NULL)
     {
-        descriptors[1] = new_fd;
+        descriptors[1] = client_fd;
     }
-}
-
-void UDP_SERVER(int *descriptors, int port, int timeout)
-{
-    // open a UDP server to listen to the port
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd == -1)
-    {
-        perror("error creating socket");
-        exit(1);
-    }
-    printf("UDP Socket created\n");
-
-    // if not set, the port will be in use for 2 minutes after the program ends
-    int enable = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
-    {
-        perror("setsockopt(SO_REUSEADDR) failed");
-        exit(1);
-    }
-    struct sockaddr_in server_addr;
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
-        perror("error binding socket");
-        exit(1);
-    }
-
-    // to start showing the game before we're sending to ourself an ack to show the first move
-    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
-        perror("error sending ACK");
-        exit(1);
-    }
-
-    // read the data from the client
-    char buffer[2];
-    struct sockaddr_in client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
-    int numbytes = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
-    if (numbytes == -1)
-    {
-        perror("error receiving data");
-        exit(1);
-    }
-    descriptors[0] = sockfd; // changing the descriptor to be the socket
-    alarm(timeout);
 }
 
 void TCP_client(int *descriptors, char *ip, int port)
@@ -221,6 +176,90 @@ void TCP_client(int *descriptors, char *ip, int port)
     descriptors[1] = sock; // changing the output to form the socket to the client
 }
 
+void UDP_SERVER(int *descriptors, int port, int timeout)
+{
+    // open a UDP server to listen to the port
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        sockets_terminator(descriptors);
+        exit(1);
+    }
+    printf("UDP Socket created\n");
+
+    // if not set, the port will be in use for 2 minutes after the program ends
+    int enable = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+    {
+        perror("setsockopt failed");
+        sockets_terminator(descriptors);
+        exit(1);
+    }
+    
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error binding socket");
+        exit(1);
+    }
+
+    // to start showing the game before we're sending to ourself an ack to show the first move
+    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error sending ACK");
+        exit(1);
+    }
+
+    // read the data from the client
+    char buffer[2];
+    struct sockaddr_in client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
+    int numbytes = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
+    if (numbytes == -1)
+    {
+        perror("error receiving data");
+        exit(1);
+    }
+    descriptors[0] = sockfd; // changing the descriptor to be the socket
+    alarm(timeout);
+}
+
+void UDP_CLIENT(int *descriptors, char *ip, int port)
+{
+    // open a UDP client to the server
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(1);
+    }
+    printf("UDP client\n");
+    fflush(stdout);
+
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+
+    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0)
+    {
+        perror("Invalid address/ Address not supported");
+        exit(1);
+    }
+
+    // send data to the server
+    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error sending data");
+        exit(1);
+    }
+
+    descriptors[1] = sockfd; // changing the output to be the socket
+}
 // for -i  nc localhost <port>
 // for -o  nc -l -p <port>
 // for -b  nc -l -p <port> | nc localhost <port>
