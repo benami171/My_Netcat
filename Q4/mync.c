@@ -66,6 +66,161 @@ void handle_alarm(int sig)
     exit(0);
 }
 
+// sending the descriptor to handel, and the portnumber to open the server on
+void TCP_SERVER(int *descriptors, int port, char *b_flag)
+{
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0)
+    {
+        perror("socket");
+        exit(EXIT_FAILURE);
+    }
+    printf("TCP socket created\n");
+
+    // allow the socket to be reused, maybe to change to fork?
+    int optval = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1)
+    {
+        perror("setsockopt");
+        exit(EXIT_FAILURE);
+    }
+
+    struct sockaddr_in server_addr;
+    // memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // listen to any address
+
+    // if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0)
+    // {
+    //     perror("inet_pton");
+    //     exit(EXIT_FAILURE);
+    // }
+
+    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+    {
+        perror("bind");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(sockfd, 1) < 0)
+    {
+        perror("listen");
+        exit(EXIT_FAILURE);
+    }
+
+    // maybe to open here fork?
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+
+    // chanigng the input_fd to the new socket after accepting the connection
+    int new_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
+    if (new_fd < 0)
+    {
+        perror("accept");
+        exit(EXIT_FAILURE);
+    }
+
+    descriptors[0] = new_fd;
+    if (b_flag != NULL)
+    {
+        descriptors[1] = new_fd;
+    }
+}
+
+void UDP_SERVER(int *descriptors, int port, int timeout)
+{
+    // open a UDP server to listen to the port
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(1);
+    }
+    printf("UDP Socket created\n");
+
+    // if not set, the port will be in use for 2 minutes after the program ends
+    int enable = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+    {
+        perror("setsockopt(SO_REUSEADDR) failed");
+        exit(1);
+    }
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error binding socket");
+        exit(1);
+    }
+
+    // to start showing the game before we're sending to ourself an ack to show the first move
+    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error sending ACK");
+        exit(1);
+    }
+
+    // read the data from the client
+    char buffer[2];
+    struct sockaddr_in client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
+    int numbytes = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
+    if (numbytes == -1)
+    {
+        perror("error receiving data");
+        exit(1);
+    }
+    descriptors[0] = sockfd; // changing the descriptor to be the socket
+    alarm(timeout);
+}
+
+void TCP_client(int *descriptors, char *ip, int port)
+{
+    // open a TCP client to the server
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == -1)
+    {
+        perror("error creating socket");
+        exit(1);
+    }
+
+    printf("TCP client\n");
+    fflush(stdout);
+
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0)
+    {
+        perror("setsockopt");
+        exit(1);
+    }
+
+    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0)
+    {
+        perror("Invalid address/ Address not supported");
+        exit(1);
+    }
+
+    // connecting to the server
+    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error connecting to server");
+        if (descriptors[0] != STDIN_FILENO) // to ensure we'rent getting input from another place
+        {
+            close(descriptors[0]);
+        }
+        exit(1);
+    }
+
+    descriptors[1] = sock; // changing the output to form the socket to the client
+}
+
 // for -i  nc localhost <port>
 // for -o  nc -l -p <port>
 // for -b  nc -l -p <port> | nc localhost <port>
@@ -85,14 +240,6 @@ int main(int argc, char *argv[])
     char *ivalue = NULL;
     char *ovalue = NULL;
     char *tvalue = NULL;
-
-    // int pipefd[2];
-
-    // if (pipe(pipefd) == -1)
-    // {
-    //     perror("pipe");
-    //     exit(EXIT_FAILURE);
-    // }
 
     while ((opt = getopt(argc, argv, "e:b:i:o:t:")) != -1)
     {
@@ -125,15 +272,6 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "Usage: %s -e \"<program> <arguments>\"\n", argv[0]);
         exit(EXIT_FAILURE);
-        // if (optind < argc)
-        // {
-        //     evalue = argv[optind];
-        // }
-        // else
-        // {
-        //     fprintf(stderr, "Usage: %s [-e \"<program> <arguments>\"] or %s \"<program> <arguments>\"\n", argv[0], argv[0]);
-        //     exit(EXIT_FAILURE);
-        // }
     }
 
     // -b cannot be used with -i or -o, not support multiple options
@@ -146,8 +284,12 @@ int main(int argc, char *argv[])
 
     // by default, the input and output are from/to the terminal
     // we will change it according to the socket input/output
-    int sock_input = STDIN_FILENO;
-    int sock_output = STDOUT_FILENO;
+    // int sock_input = STDIN_FILENO;
+    // int sock_output = STDOUT_FILENO;
+
+    int descriptors[2];
+    descriptors[0] = STDIN_FILENO;
+    descriptors[1] = STDOUT_FILENO;
 
     if (ivalue != NULL)
     {
@@ -156,61 +298,10 @@ int main(int argc, char *argv[])
         // first need to check the demand
         char server_kind[4] = {0};
         strncpy(server_kind, ivalue, 4); // copying the first 4 characters to the server_kind
+        int port = atoi(ivalue += 4);    // taking the port, skipping the first 4 characters TCPSport
         if (strcmp(server_kind, "TCPS") == 0)
         {
-            // listeing to input form client on local host, and printing to stdout
-
-            int port = atoi(ivalue += 4); // taking the port, skipping the first 4 characters TCPSport
-            int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-            if (sockfd < 0)
-            {
-                perror("socket");
-                exit(EXIT_FAILURE);
-            }
-
-            // allow the socket to be reused, maybe to change to fork?
-            int optval = 1;
-            if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1)
-            {
-                perror("setsockopt");
-                exit(EXIT_FAILURE);
-            }
-
-            struct sockaddr_in server_addr;
-            memset(&server_addr, 0, sizeof(server_addr));
-            server_addr.sin_family = AF_INET;
-            server_addr.sin_port = htons(port);
-            server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // listen to any address
-
-            // if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0)
-            // {
-            //     perror("inet_pton");
-            //     exit(EXIT_FAILURE);
-            // }
-
-            if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-            {
-                perror("bind");
-                exit(EXIT_FAILURE);
-            }
-
-            if (listen(sockfd, 1) < 0)
-            {
-                perror("listen");
-                exit(EXIT_FAILURE);
-            }
-
-            // maybe to open here fork?
-            struct sockaddr_in client_addr;
-            socklen_t client_len = sizeof(client_addr);
-
-            // chanigng the input_fd to the new socket after accepting the connection
-            sock_input = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
-            if (sock_input < 0)
-            {
-                perror("accept");
-                exit(EXIT_FAILURE);
-            }
+            TCP_SERVER(descriptors, port, NULL);
             // open fork
             // read the data and sent it to th ttt
             // char buffer[2];
@@ -222,62 +313,14 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(server_kind, "UDPS") == 0)
         {
-            int port = atoi(ivalue += 4);
-            int timeout;
             if (tvalue != NULL)
             {
-                timeout = atoi(tvalue);
+                UDP_SERVER(descriptors, port, atoi(tvalue));
             }
             else
             {
-                timeout = 0;
+                UDP_SERVER(descriptors, port, 0);
             }
-            // open a UDP server to listen to the port
-            int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-            if (sockfd == -1)
-            {
-                perror("error creating socket");
-                return 1;
-            }
-            printf("UDP Socket created\n");
-
-            // if not set, the port will be in use for 2 minutes after the program ends
-            int enable = 1;
-            if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
-            {
-                perror("setsockopt(SO_REUSEADDR) failed");
-                return 1;
-            }
-            struct sockaddr_in server_addr;
-            server_addr.sin_family = AF_INET;
-            server_addr.sin_port = htons(port);
-            server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-            if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-            {
-                perror("error binding socket");
-                return 1;
-            }
-
-            // to start showing the game before we're sending to ourself an ack to show the first move
-            if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-            {
-                perror("error sending ACK");
-                return 1;
-            }
-
-            // read the data from the client
-            char buffer[2];
-            struct sockaddr_in client_addr;
-            socklen_t client_addr_len = sizeof(client_addr);
-            int numbytes = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
-            if (numbytes == -1)
-            {
-                perror("error receiving data");
-                return 1;
-            }
-            sock_input = sockfd; // changing the descriptor to be the socket
-            alarm(timeout);
         }
     }
 
@@ -285,214 +328,69 @@ int main(int argc, char *argv[])
     {
 
         char server_kind[4] = {0};
-        strncpy(server_kind, ovalue, 4); // copying the first 4 characters to the server_kind
+        strncpy(server_kind, ovalue, 4);       // copying the first 4 characters to the server_kind
+        ovalue += 4;                           // skip the "TCPC" prefix
+        char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
+        if (ip_server == NULL)
+        {
+            fprintf(stderr, "Invalid server IP\n");
+            exit(1);
+        }
+        // get the rest of the string after the comma, this is the port
+        char *port_server = strtok(NULL, ",");
+        if (port_server == NULL)
+        {
+            fprintf(stderr, "Invalid server port\n");
+            exit(1);
+        }
+
+        int port = atoi(port_server); // converting the port to integer
+
         if (strcmp(server_kind, "TCPC") == 0)
         {
-            ovalue += 4;                           // skip the "TCPC" prefix
-            char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
-            if (ip_server == NULL)
-            {
-                fprintf(stderr, "Invalid server IP\n");
-                exit(1);
-            }
-            // get the rest of the string after the comma, this is the port
-            char *port_server = strtok(NULL, ",");
-            if (port_server == NULL)
-            {
-                fprintf(stderr, "Invalid server port\n");
-                exit(1);
-            }
-            int port = atoi(port_server); // converting the port to integer
-
-            // open a TCP client to the server
-            int sock = socket(AF_INET, SOCK_STREAM, 0);
-            if (sock == -1)
-            {
-                perror("error creating socket");
-                return 1;
-            }
-
-            struct sockaddr_in server_addr;
-            server_addr.sin_family = AF_INET;
-            server_addr.sin_port = htons(port);
-
-            if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0)
-            {
-                perror("setsockopt");
-                return 1;
-            }
-
-            if (inet_pton(AF_INET, ip_server, &server_addr.sin_addr) <= 0)
-            {
-                perror("Invalid address/ Address not supported");
-                return 1;
-            }
-
-            // connecting to the server
-            if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-            {
-                perror("error connecting to server");
-                if (sock_input != STDIN_FILENO) // to ensure we'rent getting input from another place
-                {
-                    close(sock_input);
-                }
-                return 1;
-            }
-
-            sock_output = sock; // changin the output to form the socket to the client
+            TCP_client(descriptors, ip_server, port);
         }
 
         else if (strcmp(server_kind, "UDPC") == 0) // creating UDP client
         {
-            // getting the server-ip and port to for this
-            ovalue += 4;                           // skip the "TCPC" prefix
-            char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
-            if (ip_server == NULL)
-            {
-                fprintf(stderr, "Invalid server IP\n");
-                exit(1);
-            }
-            // get the rest of the string after the comma, this is the port
-            char *port_server = strtok(NULL, ",");
-            if (port_server == NULL)
-            {
-                fprintf(stderr, "Invalid server port\n");
-                exit(1);
-            }
-
-            int port = atoi(port_server); // converting the port to integer
-            struct sockaddr_in servaddr;
-
-            // clear servaddr
-            memset(&servaddr, 0, sizeof(servaddr));
-
-            int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-            if (sockfd == -1)
-            {
-                perror("socket");
-                exit(0);
-            }
-
-            if (inet_pton(AF_INET, ip_server, &servaddr.sin_addr) <= 0)
-            {
-                perror("inet_pton");
-                return 1;
-            }
-
-            servaddr.sin_family = AF_INET;
-            servaddr.sin_addr.s_addr = inet_addr(ip_server);
-            servaddr.sin_port = htons(port);
-
-            if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0)
-            {
-                perror("setsockopt");
-                return 1;
-            }
-
-            // send the data to the server
-            // char buffer[2];
-            // // cleaning the buffer
-            // memset(buffer, 0, sizeof(buffer));
-            // if (sendto(sockfd, buffer, 2, 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
-            // {
-            //     perror("error sending data");
-            //     return 1;
-            // }
-
-            char buffer[1024];
-            ssize_t bytes_read;
-            while ((bytes_read = read(sock_input, buffer, sizeof(buffer) - 1)) > 0)
-            {
-                buffer[bytes_read] = '\0'; // null terminate the string
-                if (sendto(sockfd, buffer, bytes_read, 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
-                {
-                    perror("sendto");
-                    return 1;
-                }
-            }
-
-            sock_output = sockfd; // changin the output to form the socket to the client
+            // ????????????????????????????
         }
     }
 
-    if (bvalue != NULL)
+    if (bvalue != NULL) // changin the output to the one who we're addressing
     {
+        char server_kind[4] = {0};
         // open TCP server to listen to the port
-        bvalue += 4; // skip the "TCPS" prefix
+        strncpy(server_kind, bvalue, 4); // copying the first 4 characters to the server_kind
+        bvalue += 4;                     // skip the "TCPS" prefix
         int port = atoi(bvalue);
-
-        // create TCP socket that will listen to input on localhost and port
-        int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-        if (sockfd == -1)
+        if (strcmp(server_kind, "TCPS") == 0)
         {
-            perror("error creating socket");
-            exit(EXIT_FAILURE);
+            TCP_SERVER(descriptors, port, bvalue);
         }
-
-        // allow the socket to be reused
-        int optval = 1;
-        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1)
-        {
-            perror("setsockopt");
-            exit(EXIT_FAILURE);
-        }
-
-        // bind the socket to the address
-        struct sockaddr_in addr;
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(port);
-        addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-        if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
-        {
-            perror("error binding socket");
-            exit(EXIT_FAILURE);
-        }
-
-        // listen for incoming connections - at most 1
-        if (listen(sockfd, 1) == -1)
-        {
-            perror("error listening on socket");
-            exit(EXIT_FAILURE);
-        }
-
-        // accept the connection and change the input_fd to the new socket
-        struct sockaddr_in client_addr;
-        socklen_t client_addr_len = sizeof(client_addr);
-        int new_descriptoer = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_len);
-        if (new_descriptoer == -1)
-        {
-            perror("error accepting connection");
-            exit(EXIT_FAILURE);
-        }
-
-        // we want to send the input and output to the client
-        sock_input = new_descriptoer;
-        sock_output = new_descriptoer;
     }
-
     // After finishinig changing the input and output, we're changing the input and output to the new socket
-    if (sock_input != STDIN_FILENO)
+    if (descriptors[0] != STDIN_FILENO)
     {
-        if (dup2(sock_input, STDIN_FILENO) == -1)
+        if (dup2(descriptors[0], STDIN_FILENO) == -1)
         {
-            close(sock_input);
-            if (sock_output != STDOUT_FILENO)
+            close(descriptors[0]);
+            if (descriptors[1] != STDOUT_FILENO)
             {
-                close(sock_output);
+                close(descriptors[1]);
             }
             perror("dup2 input");
             exit(EXIT_FAILURE);
         }
     }
-    if (sock_output != STDOUT_FILENO)
+    if (descriptors[1] != STDOUT_FILENO)
     {
-        if (dup2(sock_output, STDOUT_FILENO) == -1)
+        if (dup2(descriptors[1], STDOUT_FILENO) == -1)
         {
-            close(sock_output);
-            if (sock_input != STDIN_FILENO)
+            close(descriptors[1]);
+            if (descriptors[0] != STDIN_FILENO)
             {
-                close(sock_input);
+                close(descriptors[0]);
             }
             perror("dup2 output");
             exit(EXIT_FAILURE);
@@ -500,8 +398,8 @@ int main(int argc, char *argv[])
     }
 
     RUN(evalue); // this getting the whole char of command to run
-    close(sock_output);
-    close(sock_input);
+    close(descriptors[0]);
+    close(descriptors[1]);
 
     return 0;
 }

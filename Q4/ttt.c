@@ -243,6 +243,7 @@ int main(int argc, char *argv[])
                 else
                 {
                     printf("Cell is already occupied. Please enter a different move.\n");
+                    fflush(stdout);
                 }
             } while (1);
         }
