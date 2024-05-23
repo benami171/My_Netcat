@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <netdb.h>
 
 void RUN(char *args_as_string)
 {
@@ -196,7 +197,7 @@ void UDP_SERVER(int *descriptors, int port, int timeout)
         sockets_terminator(descriptors);
         exit(1);
     }
-    
+
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
@@ -205,32 +206,37 @@ void UDP_SERVER(int *descriptors, int port, int timeout)
     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
     {
         perror("error binding socket");
-        exit(1);
-    }
-
-    // to start showing the game before we're sending to ourself an ack to show the first move
-    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
-        perror("error sending ACK");
+        sockets_terminator(descriptors);
         exit(1);
     }
 
     // read the data from the client
-    char buffer[2];
+    char buffer[1024];
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    int numbytes = recvfrom(sockfd, buffer, 2, 0, (struct sockaddr *)&client_addr, &client_addr_len);
+
+    int numbytes = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_addr_len);
     if (numbytes == -1)
     {
         perror("error receiving data");
+        sockets_terminator(descriptors);
         exit(1);
     }
+
+    if (connect(sockfd, (struct sockaddr *)&client_addr, sizeof(client_addr)) == -1)
+    {
+        perror("error connecting to client");
+        sockets_terminator(descriptors);
+        exit(1);
+    }
+
     descriptors[0] = sockfd; // changing the descriptor to be the socket
     alarm(timeout);
 }
 
 void UDP_CLIENT(int *descriptors, char *ip, int port)
 {
+    
     // open a UDP client to the server
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd == -1)
@@ -251,13 +257,17 @@ void UDP_CLIENT(int *descriptors, char *ip, int port)
         exit(1);
     }
 
-    // send data to the server
-    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
     {
-        perror("error sending data");
-        exit(1);
+        perror("error creating socket");
+        exit(EXIT_FAILURE);
     }
-
+    printf(" the server ip is %s\n", ip);
+    printf(" the server port is %d\n", port);
+    sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    // "connect" to the server - so if we use sendto/recvfrom, we don't need to specify the server address
+    connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+ 
     descriptors[1] = sockfd; // changing the output to be the socket
 }
 // for -i  nc localhost <port>
@@ -305,7 +315,11 @@ int main(int argc, char *argv[])
         }
     }
 
-    signal(SIGALRM, handle_alarm);
+    if (tvalue != NULL)
+    {
+        signal(SIGALRM, handle_alarm);
+        alarm(atoi(tvalue));
+    }
 
     if (evalue == NULL)
     {
@@ -335,22 +349,15 @@ int main(int argc, char *argv[])
         // -i TCPS<port> or UDPS<port>
         // Now need to decied if to open TCP server or UDP server
         // first need to check the demand
-        char server_kind[4] = {0};
+        char server_kind[5] = {0};
         strncpy(server_kind, ivalue, 4); // copying the first 4 characters to the server_kind
-        int port = atoi(ivalue += 4);    // taking the port, skipping the first 4 characters TCPSport
-        if (strcmp(server_kind, "TCPS") == 0)
+        ivalue += 4;                     // skip the "TCPS" prefix
+        int port = atoi(ivalue);         // taking the port, skipping the first 4 characters TCPSport
+        if (strncmp(server_kind, "TCPS", 4) == 0)
         {
             TCP_SERVER(descriptors, port, NULL);
-            // open fork
-            // read the data and sent it to th ttt
-            // char buffer[2];
-            // while (read(newsockfd, buffer, 1) > 0)
-            // {
-            //     printf("Received number: %c\n", buffer[0]);
-            //     write(pipefd[1], buffer, 1);
-            // }
         }
-        else if (strcmp(server_kind, "UDPS") == 0)
+        else if (strncmp(server_kind, "UDPS", 4) == 0)
         {
             if (tvalue != NULL)
             {
@@ -361,51 +368,84 @@ int main(int argc, char *argv[])
                 UDP_SERVER(descriptors, port, 0);
             }
         }
+        else
+        {
+            fprintf(stderr, "i_value: Invalid server kind.\n");
+            exit(1);
+        }
     }
 
     if (ovalue != NULL) // changin the output to the one who we're addressing
     {
 
-        char server_kind[4] = {0};
-        strncpy(server_kind, ovalue, 4);       // copying the first 4 characters to the server_kind
-        ovalue += 4;                           // skip the "TCPC" prefix
-        char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
-        if (ip_server == NULL)
+        if (strncmp(ovalue, "TCPC", 4) == 0)
         {
-            fprintf(stderr, "Invalid server IP\n");
-            exit(1);
-        }
-        // get the rest of the string after the comma, this is the port
-        char *port_server = strtok(NULL, ",");
-        if (port_server == NULL)
-        {
-            fprintf(stderr, "Invalid server port\n");
-            exit(1);
-        }
-
-        int port = atoi(port_server); // converting the port to integer
-
-        if (strcmp(server_kind, "TCPC") == 0)
-        {
+            ovalue += 4; // skip the "TCPS" prefix
+            char *ip_server = strtok(ovalue, ",");
+            // getting the ip like in the example TCPClocalhost,8080
+            if (ip_server == NULL)
+            {
+                fprintf(stderr, "Invalid server IP\n");
+                sockets_terminator(descriptors);
+                exit(1);
+            }
+            // get the rest of the string after the comma, this is the port
+            char *port_server = strtok(NULL, ",");
+            if (port_server == NULL)
+            {
+                fprintf(stderr, "Invalid server port\n");
+                sockets_terminator(descriptors);
+                exit(1);
+            }
+            int port = atoi(port_server); // converting the port to integer
             TCP_client(descriptors, ip_server, port);
         }
-
-        else if (strcmp(server_kind, "UDPC") == 0) // creating UDP client
+        else if (strncmp(ovalue, "UDPC", 4) == 0)
         {
-            // ????????????????????????????
+            ovalue += 4; // skip the "UDPC" prefix
+            char *ip_server = strtok(ovalue, ",");
+            if (ip_server == NULL)
+            {
+                fprintf(stderr, "Invalid server IP\n");
+                sockets_terminator(descriptors);
+                exit(1);
+            }
+
+            char *port_server = strtok(NULL, ",");
+            if (port_server == NULL)
+            {
+                fprintf(stderr, "Invalid server port\n");
+                sockets_terminator(descriptors);
+                exit(1);
+            }
+            int port = atoi(port_server); // converting the port to integer
+            UDP_CLIENT(descriptors, ip_server, port);
+        }
+        else
+        {
+            fprintf(stderr, "o_value: Invalid server kind.\n");
+            sockets_terminator(descriptors);
+            exit(1);
         }
     }
 
     if (bvalue != NULL) // changin the output to the one who we're addressing
     {
-        char server_kind[4] = {0};
-        // open TCP server to listen to the port
-        strncpy(server_kind, bvalue, 4); // copying the first 4 characters to the server_kind
-        bvalue += 4;                     // skip the "TCPS" prefix
-        int port = atoi(bvalue);
-        if (strcmp(server_kind, "TCPS") == 0)
+        if (strncmp(bvalue, "TCPS", 4) == 0)
         {
+            bvalue += 4; // skip the "TCPS" prefix
+            int port = atoi(bvalue);
             TCP_SERVER(descriptors, port, bvalue);
+            
+        } else if(strncmp(bvalue, "UDPS", 4) == 0) {
+            bvalue += 4; // skip the "UDPS" prefix
+            int port = atoi(bvalue);
+            UDP_SERVER(descriptors, port, 0); // sets descriptors[0] to the socket
+            descriptors[1] = descriptors[0]; // sets descriptors[1] to the socket
+        } else {
+            fprintf(stderr, "b_value: Invalid server kind.\n");
+            sockets_terminator(descriptors);
+            exit(1);
         }
     }
     // After finishinig changing the input and output, we're changing the input and output to the new socket

@@ -57,6 +57,8 @@
   "C_Cpp_Runner.useLinkTimeOptimization": false,
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
   "files.associations": {
-    "fcntl.h": "c"
+    "fcntl.h": "c",
+    "errno.h": "c",
+    "unistd.h": "c"
   }
 }
