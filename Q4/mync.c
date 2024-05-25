@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <poll.h>
 
 void RUN(char *args_as_string)
 {
@@ -267,11 +268,74 @@ int main(int argc, char *argv[])
     }
 
     signal(SIGALRM, handle_alarm);
+    int descriptors[2];
+    descriptors[0] = STDIN_FILENO;
+    descriptors[1] = STDOUT_FILENO;
 
     if (evalue == NULL)
     {
-        fprintf(stderr, "Usage: %s -e \"<program> <arguments>\"\n", argv[0]);
-        exit(EXIT_FAILURE);
+        struct pollfd fds[2];
+        int nfds = 0;
+
+        // check if we need to listen to the input_fd (only if it is not the stdin)
+        if (descriptors[0] != STDIN_FILENO)
+        {
+            fds[nfds].fd = descriptors[0];
+            fds[nfds].events = POLLIN;
+            nfds++;
+        }
+
+        // listen to the stdin
+        fds[nfds].fd = STDIN_FILENO;
+        fds[nfds].events = POLLIN;
+        nfds++;
+
+        while (1)
+        {
+            int ret = poll(fds, nfds, -1);
+            if (ret == -1)
+            {
+                perror("poll");
+                exit(EXIT_FAILURE);
+            }
+
+            for (int i = 0; i < nfds; i++)
+            {
+                if (fds[i].revents & POLLIN)
+                {
+                    char buffer[1024];
+                    int bytes_read = read(fds[i].fd, buffer, sizeof(buffer));
+                    if (bytes_read == -1)
+                    {
+                        perror("read");
+                        exit(EXIT_FAILURE);
+                    }
+                    if (bytes_read == 0)
+                    {
+                        exit(EXIT_SUCCESS); // EOF
+                    }
+
+                    if (fds[i].fd == descriptors[0])
+                    {
+                        // write to the stdout
+                        if (write(STDOUT_FILENO, buffer, bytes_read) == -1)
+                        {
+                            perror("write");
+                            exit(EXIT_FAILURE);
+                        }
+                    }
+                    else if (fds[i].fd == STDIN_FILENO && descriptors[1] != STDOUT_FILENO)
+                    {
+                        // write to the output_fd
+                        if (write(descriptors[1], buffer, bytes_read) == -1)
+                        {
+                            perror("write");
+                            exit(EXIT_FAILURE);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // -b cannot be used with -i or -o, not support multiple options
@@ -286,10 +350,6 @@ int main(int argc, char *argv[])
     // we will change it according to the socket input/output
     // int sock_input = STDIN_FILENO;
     // int sock_output = STDOUT_FILENO;
-
-    int descriptors[2];
-    descriptors[0] = STDIN_FILENO;
-    descriptors[1] = STDOUT_FILENO;
 
     if (ivalue != NULL)
     {
@@ -327,8 +387,8 @@ int main(int argc, char *argv[])
     if (ovalue != NULL) // changin the output to the one who we're addressing
     {
 
-        char server_kind[4] = {0};
-        strncpy(server_kind, ovalue, 4);       // copying the first 4 characters to the server_kind
+        char client_kind[4] = {0};
+        strncpy(client_kind, ovalue, 4);       // copying the first 4 characters to the server_kind
         ovalue += 4;                           // skip the "TCPC" prefix
         char *ip_server = strtok(ovalue, ","); // getting the ip like in the example TCPClocalhost,8080
         if (ip_server == NULL)
@@ -346,12 +406,13 @@ int main(int argc, char *argv[])
 
         int port = atoi(port_server); // converting the port to integer
 
-        if (strcmp(server_kind, "TCPC") == 0)
+        if (strcmp(client_kind, "TCPC") == 0)
         {
+            printf("TCPC\n");
             TCP_client(descriptors, ip_server, port);
         }
 
-        else if (strcmp(server_kind, "UDPC") == 0) // creating UDP client
+        else if (strcmp(client_kind, "UDPC") == 0) // creating UDP client
         {
             // ????????????????????????????
         }
@@ -364,6 +425,7 @@ int main(int argc, char *argv[])
         strncpy(server_kind, bvalue, 4); // copying the first 4 characters to the server_kind
         bvalue += 4;                     // skip the "TCPS" prefix
         int port = atoi(bvalue);
+
         if (strcmp(server_kind, "TCPS") == 0)
         {
             TCP_SERVER(descriptors, port, bvalue);
