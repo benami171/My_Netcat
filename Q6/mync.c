@@ -14,6 +14,8 @@
 #include <netdb.h>
 #include <poll.h>
 #include <sys/select.h>
+#include <sys/un.h>
+#include <netdb.h>
 
 void RUN(char *args_as_string)
 {
@@ -282,6 +284,151 @@ void UDP_CLIENT(int *descriptors, char *ip, int port)
 
     descriptors[1] = sockfd; // changing the output to be the socket
 }
+
+// UNIX Domain Socket
+void UDS_SERVER_STREAM(char *path, int *descriptors)
+{
+    // opening a UDS server
+
+    int sockfd = socket(AF_UNIX, SOCK_STREAM, 0); // for stream like tcp protocol
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(1);
+    }
+
+    printf("UDS socket created\n");
+    struct sockaddr_un server_addr;
+    server_addr.sun_family = AF_UNIX;
+    strcpy(server_addr.sun_path, path);
+
+    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error binding socket");
+        exit(1);
+    }
+
+    if (listen(sockfd, 1) == -1)
+    {
+        perror("error listening");
+        exit(1);
+    }
+
+    struct sockaddr_un client_addr;
+    socklen_t client_len = sizeof(client_addr);
+
+    int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
+    if (client_fd == -1)
+    {
+        perror("error accepting connection");
+        exit(1);
+    }
+
+    descriptors[0] = client_fd; // chanigng the input to be the socket
+}
+
+// UNIX Domain Socket
+void UDS_CLIENT_STREAM(char *path, int *descriptors)
+{
+    // open a UDS client to the server
+    int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(1);
+    }
+
+    printf("UDS client\n");
+    fflush(stdout);
+
+    struct sockaddr_un server_addr;
+    server_addr.sun_family = AF_UNIX;
+    strcpy(server_addr.sun_path, path);
+
+    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error connecting to server");
+        exit(1);
+    }
+
+    descriptors[1] = sockfd; // changing the output to be the socket
+}
+
+// UNIX Domain Socket for datagram
+void UDS_SERVER_DGRAM(char *path, int *descriptors)
+{
+    // opening a UDS server
+    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0); // for datagram like udp protocol
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(1);
+    }
+
+    printf("UDS socket created\n");
+    struct sockaddr_un server_addr;
+    server_addr.sun_family = AF_UNIX;
+    strcpy(server_addr.sun_path, path);
+
+    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error binding socket");
+        exit(1);
+    }
+
+    struct sockaddr_un client_addr;
+    socklen_t client_len = sizeof(client_addr);
+
+    char buffer[1024];
+    int numbytes = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_len);
+    if (numbytes == -1)
+    {
+        perror("error receiving data");
+        exit(1);
+    }
+
+    if (connect(sockfd, (struct sockaddr *)&client_addr, sizeof(client_addr)) == -1)
+    {
+        perror("error connecting to client");
+        exit(1);
+    }
+
+    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error sending ACK");
+        exit(1);
+    }
+
+    descriptors[0] = sockfd; // changing the input to be the socket
+}
+
+// UNIX Domain Socket for datagram
+void UDS_CLIENT_DGRAM(char *path, int *descriptors)
+{
+    // open a UDS client to the server
+    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(1);
+    }
+
+    printf("UDS client\n");
+    fflush(stdout);
+
+    struct sockaddr_un server_addr;
+    server_addr.sun_family = AF_UNIX;
+    strcpy(server_addr.sun_path, path);
+
+    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("error connecting to server");
+        exit(1);
+    }
+
+    descriptors[1] = sockfd; // changing the output to be the socket
+}
+
 // for -i  nc localhost <port>
 // for -o  nc -l -p <port>
 // for -b  nc -l -p <port> | nc localhost <port>
@@ -337,6 +484,138 @@ int main(int argc, char *argv[])
     descriptors[0] = STDIN_FILENO;  // input fd
     descriptors[1] = STDOUT_FILENO; // output fd
 
+    if (evalue == NULL)
+    {
+        // fprintf(stderr, "Usage: %s -e \"<program> <arguments>\"\n", argv[0]);
+        // exit(1);
+        // struct pollfd fds[2];
+        // int nfds = 2;
+
+        // fds[0].fd = STDIN_FILENO;
+        // fds[0].events = POLLIN;
+
+        // fds[1].fd = descriptors[0];
+        // fds[1].events = POLLIN;
+
+        // while (1)
+        // {
+        //     int ret = poll(fds, nfds, -1);
+        //     if (ret == -1)
+        //     {
+        //         perror("poll");
+        //         exit(EXIT_FAILURE);
+        //     }
+
+        //     if (fds[1].revents & POLLIN)
+        //     { // input_fd has data to read
+        //         char buffer[1024];
+        //         int bytes_read = read(descriptors[0], buffer, sizeof(buffer)); // read from the input_fd
+        //         if (bytes_read == -1)
+        //         {
+        //             perror("read");
+        //             exit(EXIT_FAILURE);
+        //         }
+        //         if (bytes_read == 0)
+        //         {
+        //             break;
+        //         }
+        //         // write to the stdout
+        //         if (write(STDOUT_FILENO, buffer, bytes_read) == -1)
+        //         {
+        //             perror("write");
+        //             exit(EXIT_FAILURE);
+        //         }
+        //     }
+
+        //     if (fds[0].revents & POLLIN)
+        //     { // stdin has data to read
+        //         char buffer[1024];
+        //         int bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer)); // read from the stdin
+        //         if (bytes_read == -1)
+        //         {
+        //             perror("read");
+        //             exit(EXIT_FAILURE);
+        //         }
+        //         if (bytes_read == 0)
+        //         {
+        //             break;
+        //         }
+        //         if (write(descriptors[1], buffer, bytes_read) == -1)
+        //         {
+        //             perror("write");
+        //             exit(EXIT_FAILURE);
+        //         }
+        //     }
+        // }
+
+        // fd_set read_fds;
+        // int max_fd = descriptors[0]; // > descriptors[1] ? descriptors[0] : descriptors[1];
+
+        // while (1)
+        // {
+        //     FD_ZERO(&read_fds);
+
+        //     // check if we need to listen to the input_fd (only if it is not the stdin)
+        //     if (descriptors[0] != STDIN_FILENO)
+        //     {
+        //         FD_SET(descriptors[0], &read_fds);
+        //     }
+
+        //     // listen to the stdin
+        //     FD_SET(STDIN_FILENO, &read_fds);
+
+        //     // wait for any of the file descriptors to have data to read
+        //     if (select(max_fd + 1, &read_fds, NULL, NULL, NULL) == -1)
+        //     {
+        //         perror("select");
+        //         exit(EXIT_FAILURE);
+        //     }
+
+        //     // check if the input_fd has data to read (a socket or a file - not the stdin)
+        //     if (descriptors[0] != STDIN_FILENO && FD_ISSET(descriptors[0], &read_fds))
+        //     {
+        //         char buffer[1024];
+        //         int bytes_read = read(descriptors[0], buffer, sizeof(buffer)); // read from the input_fd
+        //         if (bytes_read == -1)
+        //         {
+        //             perror("read");
+        //             exit(EXIT_FAILURE);
+        //         }
+        //         if (bytes_read == 0)
+        //         {
+        //             break;
+        //         }
+        //         // write to the stdout
+        //         if (write(STDOUT_FILENO, buffer, bytes_read) == -1)
+        //         {
+        //             perror("write");
+        //             exit(EXIT_FAILURE);
+        //         }
+        //     }
+
+        //     // check if the stdin has data to read (only if we need to write to the output_fd - output_fd != STDOUT_FILENO)
+        //     if (FD_ISSET(STDIN_FILENO, &read_fds) && descriptors[1] != STDOUT_FILENO)
+        //     {
+        //         char buffer[1024];
+        //         int bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer)); // read from the stdin
+        //         if (bytes_read == -1)
+        //         {
+        //             perror("read");
+        //             exit(EXIT_FAILURE);
+        //         }
+        //         if (bytes_read == 0)
+        //         {
+        //             break;
+        //         }
+        //         if (write(descriptors[1], buffer, bytes_read) == -1)
+        //         {
+        //             perror("write");
+        //             exit(EXIT_FAILURE);
+        //         }
+        //     }
+        // }
+    }
+
     // -b cannot be used with -i or -o, not support multiple options
     if (bvalue != NULL && (ivalue != NULL || ovalue != NULL))
     {
@@ -374,6 +653,15 @@ int main(int argc, char *argv[])
                 UDP_SERVER(descriptors, port, 0);
             }
         }
+
+        else if(strncmp(server_kind, "UDSSS", 5) == 0){
+            UDS_SERVER_STREAM(ivalue, descriptors);
+        }
+
+        else if(strncmp(server_kind, "UDSSD", 5) == 0){
+            UDS_SERVER_DGRAM(ivalue, descriptors);
+        }
+
         else
         {
             fprintf(stderr, "i_value: Invalid server kind.\n");
@@ -457,113 +745,37 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
-
-    if (evalue != NULL)
-    {
-        // After finishinig changing the input and output, we're changing the input and output to the new socket
-        if (descriptors[0] != STDIN_FILENO)
-        {
-            if (dup2(descriptors[0], STDIN_FILENO) == -1)
-            {
-                close(descriptors[0]);
-                if (descriptors[1] != STDOUT_FILENO)
-                {
-                    close(descriptors[1]);
-                }
-                perror("dup2 input");
-                exit(EXIT_FAILURE);
-            }
-        }
-        if (descriptors[1] != STDOUT_FILENO)
-        {
-            if (dup2(descriptors[1], STDOUT_FILENO) == -1)
-            {
-                close(descriptors[1]);
-                if (descriptors[0] != STDIN_FILENO)
-                {
-                    close(descriptors[0]);
-                }
-                perror("dup2 output");
-                exit(EXIT_FAILURE);
-            }
-        }
-    }
-    else //(evalue == NULL)
-    {
-        // fprintf(stderr, "Usage: %s -e \"<program> <arguments>\"\n", argv[0]);
-        // exit(1);
-
-        struct pollfd fds[2];
-        int nfds = 2;
-
-        fds[0].fd = STDIN_FILENO;
-        fds[0].events = POLLIN;
-
-        fds[1].fd = descriptors[0];
-        fds[1].events = POLLIN;
-
-        while (1)
-        {
-            int ret = poll(fds, nfds, -1);
-            if (ret == -1)
-            {
-                perror("poll");
-                exit(EXIT_FAILURE);
-            }
-
-            if (fds[1].revents & POLLIN)
-            { // input_fd has data to read
-                char buffer[1024];
-                int bytes_read = read(descriptors[0], buffer, sizeof(buffer)); // read from the input_fd
-                if (bytes_read == -1)
-                {
-                    perror("read");
-                    exit(EXIT_FAILURE);
-                }
-                if (bytes_read == 0)
-                {
-                    break;
-                }
-                // write to the stdout
-                if (write(STDOUT_FILENO, buffer, bytes_read) == -1)
-                {
-                    perror("write");
-                    exit(EXIT_FAILURE);
-                }
-            }
-
-            if (fds[0].revents & POLLIN)
-            { // stdin has data to read
-                char buffer[1024];
-                int bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer)); // read from the stdin
-                if (bytes_read == -1)
-                {
-                    perror("read");
-                    exit(EXIT_FAILURE);
-                }
-                if (bytes_read == 0)
-                {
-                    break;
-                }
-                if (write(descriptors[1], buffer, bytes_read) == -1)
-                {
-                    perror("write");
-                    exit(EXIT_FAILURE);
-                }
-            }
-        }
-    }
-    RUN(evalue); // this getting the whole char of command to run
-
-    // we need to close the descriptors, if they are not the standard input/output
+    // After finishinig changing the input and output, we're changing the input and output to the new socket
     if (descriptors[0] != STDIN_FILENO)
     {
-        close(descriptors[0]);
+        if (dup2(descriptors[0], STDIN_FILENO) == -1)
+        {
+            close(descriptors[0]);
+            if (descriptors[1] != STDOUT_FILENO)
+            {
+                close(descriptors[1]);
+            }
+            perror("dup2 input");
+            exit(EXIT_FAILURE);
+        }
     }
     if (descriptors[1] != STDOUT_FILENO)
     {
-        close(descriptors[1]);
+        if (dup2(descriptors[1], STDOUT_FILENO) == -1)
+        {
+            close(descriptors[1]);
+            if (descriptors[0] != STDIN_FILENO)
+            {
+                close(descriptors[0]);
+            }
+            perror("dup2 output");
+            exit(EXIT_FAILURE);
+        }
     }
+
+    RUN(evalue); // this getting the whole char of command to run
+    close(descriptors[0]);
+    close(descriptors[1]);
 
     return 0;
 }

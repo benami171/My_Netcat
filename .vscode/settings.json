@@ -59,6 +59,7 @@
   "files.associations": {
     "fcntl.h": "c",
     "errno.h": "c",
-    "unistd.h": "c"
+    "unistd.h": "c",
+    "environments.h": "c"
   }
 }
