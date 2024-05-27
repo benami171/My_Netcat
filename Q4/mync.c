@@ -168,10 +168,7 @@ void TCP_client(int *descriptors, char *ip, int port)
     if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
     {
         perror("error connecting to server");
-        if (descriptors[0] != STDIN_FILENO) // to ensure we'rent getting input from another place
-        {
-            close(descriptors[0]);
-        }
+        sockets_terminator(descriptors);
         exit(1);
     }
 
@@ -387,7 +384,7 @@ int main(int argc, char *argv[])
         {
             ovalue += 4; // skip the "TCPS" prefix
             char *ip_server = strtok(ovalue, ",");
-            // getting the ip like in the example TCPClocalhost,8080
+            // getting the ip like in the example TCPC127.0.0.1,8080
             if (ip_server == NULL)
             {
                 fprintf(stderr, "Invalid server IP\n");
@@ -490,29 +487,30 @@ int main(int argc, char *argv[])
     }
     else //(evalue == NULL)
     {
-        // fprintf(stderr, "Usage: %s -e \"<program> <arguments>\"\n", argv[0]);
-        // exit(1);
 
-        struct pollfd fds[2];
-        int nfds = 2;
+             // OUTPUT -> DESCRIPTORS[1] -> STDOUT
 
-        fds[0].fd = STDIN_FILENO;
-        fds[0].events = POLLIN;
 
-        fds[1].fd = descriptors[0];
-        fds[1].events = POLLIN;
+        struct pollfd fds[2]; // poll file descriptors
+        int nfds = 2;        // number of file descriptors
+
+        fds[0].fd = STDIN_FILENO; // stdin
+        fds[0].events = POLLIN;  // check for reading
+
+        fds[1].fd = descriptors[0]; // input_fd
+        fds[1].events = POLLIN;   // check for reading
 
         while (1)
         {
-            int ret = poll(fds, nfds, -1);
-            if (ret == -1)
+            int ret = poll(fds, nfds, -1); // wait indefinitely for an event
+            if (ret == -1) // poll failed
             {
                 perror("poll");
                 exit(EXIT_FAILURE);
             }
 
-            if (fds[1].revents & POLLIN)
-            { // input_fd has data to read
+            if (fds[1].revents & POLLIN) // input_fd has data to read
+            { 
                 char buffer[1024];
                 int bytes_read = read(descriptors[0], buffer, sizeof(buffer)); // read from the input_fd
                 if (bytes_read == -1)
@@ -525,7 +523,7 @@ int main(int argc, char *argv[])
                     break;
                 }
                 // write to the stdout
-                if (write(STDOUT_FILENO, buffer, bytes_read) == -1)
+                if (write(descriptors[1], buffer, bytes_read) == -1)
                 {
                     perror("write");
                     exit(EXIT_FAILURE);
