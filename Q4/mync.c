@@ -486,6 +486,7 @@ int main(int argc, char *argv[])
                 exit(EXIT_FAILURE);
             }
         }
+        RUN(evalue); // this getting the whole char of command to run
     }
     else //(evalue == NULL)
     {
@@ -552,7 +553,6 @@ int main(int argc, char *argv[])
             }
         }
     }
-    RUN(evalue); // this getting the whole char of command to run
 
     // we need to close the descriptors, if they are not the standard input/output
     if (descriptors[0] != STDIN_FILENO)
