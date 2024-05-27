@@ -13,7 +13,6 @@
 #include <signal.h>
 #include <netdb.h>
 #include <poll.h>
-#include <sys/select.h>
 
 void RUN(char *args_as_string)
 {
@@ -328,8 +327,8 @@ int main(int argc, char *argv[])
     }
 
     if (tvalue != NULL)
-    {
-        signal(SIGALRM, handle_alarm);
+    {                                  // allowing  us to handle a problem with the CPU
+        signal(SIGALRM, handle_alarm); // sending a singal, and hadniling the alarm, instead of the CPU
         alarm(atoi(tvalue));
     }
 
