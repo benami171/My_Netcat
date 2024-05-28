@@ -123,7 +123,6 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag, int flag)
         exit(EXIT_FAILURE);
     }
 
-    // maybe to open here fork?
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
 
@@ -309,8 +308,7 @@ void UDP_CLIENT(int *descriptors, char *ip, int port, int flag)
     }
     printf(" the server ip is %s\n", ip);
     printf(" the server port is %d\n", port);
-    // sendto(sockfd, "Starting game\n", 14, 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
-    // "connect" to the server - so if we use sendto/recvfrom, we don't need to specify the server address
+
     if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
     {
         perror("error connecting to server");
@@ -458,25 +456,6 @@ void UDS_SERVER_DGRAM(char *path, int *descriptors)
     }
 
     printf("3.UDS received data\n");
-
-    // if (connect(sockfd, (struct sockaddr *)&client_addr, sizeof(client_addr)) == -1)
-    // {
-    //     perror("error connecting to client");
-    //     sockets_terminator(descriptors);
-    //     exit(1);
-    // }
-
-    // printf("3.UDS connected\n");
-
-    // if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&client_addr, client_len) == -1)
-    // {
-    //     perror("error sending ACK");
-    //     sockets_terminator(descriptors);
-    //     exit(1);
-    // }
-
-    // printf("4.UDS sent ACK\n");
-
     descriptors[0] = sockfd; // changing the input to be the socket
 }
 
@@ -579,13 +558,6 @@ int main(int argc, char *argv[])
 
     if (ivalue != NULL)
     {
-        // -i TCPS<port> or UDPS<port>
-        // Now need to decied if to open TCP server or UDP server
-        // first need to check the demand
-
-        // strncpy(server_kind, ivalue, 4); // copying the first 4 characters to the server_kind
-        // skip the "TCPS" prefix
-        // taking the port, skipping the first 4 characters TCPSport
         printf("The i_value is: %s\n", ivalue);
         if (strncmp(ivalue, "TCPS", 4) == 0)
         {
