@@ -346,16 +346,17 @@ int main(int argc, char *argv[])
         // -i TCPS<port> or UDPS<port>
         // Now need to decied if to open TCP server or UDP server
         // first need to check the demand
-        char server_kind[5] = {0};
-        strncpy(server_kind, ivalue, 4); // copying the first 4 characters to the server_kind
-        ivalue += 4;                     // skip the "TCPS" prefix
-        int port = atoi(ivalue);         // taking the port, skipping the first 4 characters TCPSport
-        if (strncmp(server_kind, "TCPS", 4) == 0)
+        printf("The i_value is: %s\n", ivalue);
+        if (strncmp(ivalue, "TCPS", 4) == 0)
         {
+            ivalue += 4;
+            int port = atoi(ivalue);
             TCP_SERVER(descriptors, port, NULL);
         }
-        else if (strncmp(server_kind, "UDPS", 4) == 0)
+        else if (strncmp(ivalue, "UDPS", 4) == 0)
         {
+            ivalue += 4;
+            int port = atoi(ivalue);
             if (tvalue != NULL)
             {
                 UDP_SERVER(descriptors, port, atoi(tvalue));
@@ -484,24 +485,24 @@ int main(int argc, char *argv[])
     {
 
         struct pollfd fds[4]; // poll file descriptors
-        int nfds = 4;        // number of file descriptors
+        int nfds = 4;         // number of file descriptors
 
         fds[0].fd = descriptors[0]; // stdin
-        fds[0].events = POLLIN;  // check for reading
+        fds[0].events = POLLIN;     // check for reading
 
         fds[1].fd = descriptors[1]; // input_fd
-        fds[1].events = POLLIN;   // check for reading
+        fds[1].events = POLLIN;     // check for reading
 
         fds[2].fd = STDIN_FILENO; // stdin
-        fds[2].events = POLLIN;  // check for reading
+        fds[2].events = POLLIN;   // check for reading
 
         fds[3].fd = STDOUT_FILENO; // stdout
-        fds[3].events = POLLIN;   // check for reading
+        fds[3].events = POLLIN;    // check for reading
 
         while (1)
         {
             int ret = poll(fds, nfds, -1); // wait indefinitely for an event
-            if (ret == -1) // poll failed
+            if (ret == -1)                 // poll failed
             {
                 perror("poll");
                 exit(EXIT_FAILURE);
@@ -509,8 +510,8 @@ int main(int argc, char *argv[])
 
             // in case b is null we know that the values in descriptors[0] and descriptors[1] are not the same
             // and in this case we will always read from descriptors[0] and write to descriptors[1].
-            if (bvalue == NULL && fds[0].revents & POLLIN) 
-            { 
+            if (bvalue == NULL && fds[0].revents & POLLIN)
+            {
                 char buffer[1024];
                 int bytes_read = read(fds[0].fd, buffer, sizeof(buffer)); // read from the stdin
                 if (bytes_read == -1)
@@ -529,12 +530,11 @@ int main(int argc, char *argv[])
                 }
             }
 
-
             // in case b is not null we know that the values in descriptors[0] and descriptors[1] are the same
             // so we need to seperate in which case we are reading from stdin or from the input_fd
-            // and write to stdout or to the output_fd 
+            // and write to stdout or to the output_fd
             if (bvalue != NULL && fds[1].revents & POLLIN) // input_fd has data to read
-            { 
+            {
                 char buffer[1024];
                 int bytes_read = read(fds[1].fd, buffer, sizeof(buffer)); // read from the input_fd
                 if (bytes_read == -1)
@@ -553,7 +553,7 @@ int main(int argc, char *argv[])
                 }
             }
             if (bvalue != NULL && fds[2].revents & POLLIN) // stdin has data to read
-            {  
+            {
                 char buffer[1024];
                 int bytes_read = read(fds[2].fd, buffer, sizeof(buffer)); // read from stdin
                 if (bytes_read == -1)
@@ -575,14 +575,8 @@ int main(int argc, char *argv[])
     }
 
     // we need to close the descriptors, if they are not the standard input/output
-    if (descriptors[0] != STDIN_FILENO)
-    {
-        close(descriptors[0]);
-    }
-    if (descriptors[1] != STDOUT_FILENO)
-    {
-        close(descriptors[1]);
-    }
+    close(descriptors[0]);
+    close(descriptors[1]);
 
     return 0;
 }

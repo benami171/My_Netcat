@@ -514,132 +514,6 @@ int main(int argc, char *argv[])
     descriptors[0] = STDIN_FILENO;  // input fd
     descriptors[1] = STDOUT_FILENO; // output fd
 
-    if (evalue == NULL)
-    {
-        // fprintf(stderr, "Usage: %s -e \"<program> <arguments>\"\n", argv[0]);
-        // exit(1);
-        // struct pollfd fds[2];
-        // int nfds = 2;
-        // fds[0].fd = STDIN_FILENO;
-        // fds[0].events = POLLIN;
-        // fds[1].fd = descriptors[0];
-        // fds[1].events = POLLIN;
-        // while (1)
-        // {
-        //     int ret = poll(fds, nfds, -1);
-        //     if (ret == -1)
-        //     {
-        //         perror("poll");
-        //         exit(EXIT_FAILURE);
-        //     }
-        //     if (fds[1].revents & POLLIN)
-        //     { // input_fd has data to read
-        //         char buffer[1024];
-        //         int bytes_read = read(descriptors[0], buffer, sizeof(buffer)); // read from the input_fd
-        //         if (bytes_read == -1)
-        //         {
-        //             perror("read");
-        //             exit(EXIT_FAILURE);
-        //         }
-        //         if (bytes_read == 0)
-        //         {
-        //             break;
-        //         }
-        //         // write to the stdout
-        //         if (write(STDOUT_FILENO, buffer, bytes_read) == -1)
-        //         {
-        //             perror("write");
-        //             exit(EXIT_FAILURE);
-        //         }
-        //     }
-        //     if (fds[0].revents & POLLIN)
-        //     { // stdin has data to read
-        //         char buffer[1024];
-        //         int bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer)); // read from the stdin
-        //         if (bytes_read == -1)
-        //         {
-        //             perror("read");
-        //             exit(EXIT_FAILURE);
-        //         }
-        //         if (bytes_read == 0)
-        //         {
-        //             break;
-        //         }
-        //         if (write(descriptors[1], buffer, bytes_read) == -1)
-        //         {
-        //             perror("write");
-        //             exit(EXIT_FAILURE);
-        //         }
-        //     }
-        // }
-        // fd_set read_fds;
-        // int max_fd = descriptors[0]; // > descriptors[1] ? descriptors[0] : descriptors[1];
-
-        // while (1)
-        // {
-        //     FD_ZERO(&read_fds);
-
-        //     // check if we need to listen to the input_fd (only if it is not the stdin)
-        //     if (descriptors[0] != STDIN_FILENO)
-        //     {
-        //         FD_SET(descriptors[0], &read_fds);
-        //     }
-
-        //     // listen to the stdin
-        //     FD_SET(STDIN_FILENO, &read_fds);
-
-        //     // wait for any of the file descriptors to have data to read
-        //     if (select(max_fd + 1, &read_fds, NULL, NULL, NULL) == -1)
-        //     {
-        //         perror("select");
-        //         exit(EXIT_FAILURE);
-        //     }
-
-        //     // check if the input_fd has data to read (a socket or a file - not the stdin)
-        //     if (descriptors[0] != STDIN_FILENO && FD_ISSET(descriptors[0], &read_fds))
-        //     {
-        //         char buffer[1024];
-        //         int bytes_read = read(descriptors[0], buffer, sizeof(buffer)); // read from the input_fd
-        //         if (bytes_read == -1)
-        //         {
-        //             perror("read");
-        //             exit(EXIT_FAILURE);
-        //         }
-        //         if (bytes_read == 0)
-        //         {
-        //             break;
-        //         }
-        //         // write to the stdout
-        //         if (write(STDOUT_FILENO, buffer, bytes_read) == -1)
-        //         {
-        //             perror("write");
-        //             exit(EXIT_FAILURE);
-        //         }
-        //     }
-
-        //     // check if the stdin has data to read (only if we need to write to the output_fd - output_fd != STDOUT_FILENO)
-        //     if (FD_ISSET(STDIN_FILENO, &read_fds) && descriptors[1] != STDOUT_FILENO)
-        //     {
-        //         char buffer[1024];
-        //         int bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer)); // read from the stdin
-        //         if (bytes_read == -1)
-        //         {
-        //             perror("read");
-        //             exit(EXIT_FAILURE);
-        //         }
-        //         if (bytes_read == 0)
-        //         {
-        //             break;
-        //         }
-        //         if (write(descriptors[1], buffer, bytes_read) == -1)
-        //         {
-        //             perror("write");
-        //             exit(EXIT_FAILURE);
-        //         }
-        //     }
-        // }
-    }
-
     // -b cannot be used with -i or -o, not support multiple options
     if (bvalue != NULL && (ivalue != NULL || ovalue != NULL))
     {
@@ -783,17 +657,17 @@ int main(int argc, char *argv[])
             UDP_SERVER(descriptors, port, 0); // sets descriptors[0] to the socket
             descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
         }
-        else if (strncmp(bvalue, "UDSSD",5) == 0)
+        else if (strncmp(bvalue, "UDSSD", 5) == 0)
         {
             bvalue += 5; // skip the "UDSSD" prefix
             UDS_SERVER_DGRAM(bvalue, descriptors);
-            descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
+            descriptors[1] = descriptors[0]; // sets descriptors[1] to the socket
         }
-        else if (strncmp(bvalue,"UDSSS",5) == 0)
+        else if (strncmp(bvalue, "UDSSS", 5) == 0)
         {
             bvalue += 5; // skip the "UDSSS" prefix
             UDS_SERVER_STREAM(bvalue, descriptors);
-            descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
+            descriptors[1] = descriptors[0]; // sets descriptors[1] to the socket
         }
         else
         {
@@ -802,35 +676,131 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
-    // After finishinig changing the input and output, we're changing the input and output to the new socket
-    if (descriptors[0] != STDIN_FILENO)
+
+    if (evalue != NULL)
     {
-        if (dup2(descriptors[0], STDIN_FILENO) == -1)
+        // After finishinig changing the input and output, we're changing the input and output to the new socket
+        if (descriptors[0] != STDIN_FILENO)
         {
-            close(descriptors[0]);
-            if (descriptors[1] != STDOUT_FILENO)
-            {
-                close(descriptors[1]);
-            }
-            perror("dup2 input");
-            exit(EXIT_FAILURE);
-        }
-    }
-    if (descriptors[1] != STDOUT_FILENO)
-    {
-        if (dup2(descriptors[1], STDOUT_FILENO) == -1)
-        {
-            close(descriptors[1]);
-            if (descriptors[0] != STDIN_FILENO)
+            if (dup2(descriptors[0], STDIN_FILENO) == -1)
             {
                 close(descriptors[0]);
+                if (descriptors[1] != STDOUT_FILENO)
+                {
+                    close(descriptors[1]);
+                }
+                perror("dup2 input");
+                exit(EXIT_FAILURE);
             }
-            perror("dup2 output");
-            exit(EXIT_FAILURE);
+        }
+        if (descriptors[1] != STDOUT_FILENO)
+        {
+            if (dup2(descriptors[1], STDOUT_FILENO) == -1)
+            {
+                close(descriptors[1]);
+                if (descriptors[0] != STDIN_FILENO)
+                {
+                    close(descriptors[0]);
+                }
+                perror("dup2 output");
+                exit(EXIT_FAILURE);
+            }
+        }
+        RUN(evalue); // this gets the whole command string and runs it
+    }
+    else //(evalue == NULL)
+    {
+
+        struct pollfd fds[4]; // poll file descriptors
+        int nfds = 4;         // number of file descriptors
+
+        fds[0].fd = descriptors[0]; // stdin
+        fds[0].events = POLLIN;     // check for reading
+
+        fds[1].fd = descriptors[1]; // input_fd
+        fds[1].events = POLLIN;     // check for reading
+
+        fds[2].fd = STDIN_FILENO; // stdin
+        fds[2].events = POLLIN;   // check for reading
+
+        fds[3].fd = STDOUT_FILENO; // stdout
+        fds[3].events = POLLIN;    // check for reading
+
+        while (1)
+        {
+            int ret = poll(fds, nfds, -1); // wait indefinitely for an event
+            if (ret == -1)                 // poll failed
+            {
+                perror("poll");
+                exit(EXIT_FAILURE);
+            }
+
+            // in case b is null we know that the values in descriptors[0] and descriptors[1] are not the same
+            // and in this case we will always read from descriptors[0] and write to descriptors[1].
+            if (bvalue == NULL && fds[0].revents & POLLIN)
+            {
+                char buffer[1024];
+                int bytes_read = read(fds[0].fd, buffer, sizeof(buffer)); // read from the stdin
+                if (bytes_read == -1)
+                {
+                    perror("read");
+                    exit(EXIT_FAILURE);
+                }
+                if (bytes_read == 0)
+                {
+                    break;
+                }
+                if (write(fds[1].fd, buffer, bytes_read) == -1)
+                {
+                    perror("write");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            // in case b is not null we know that the values in descriptors[0] and descriptors[1] are the same
+            // so we need to seperate in which case we are reading from stdin or from the input_fd
+            // and write to stdout or to the output_fd
+            if (bvalue != NULL && fds[1].revents & POLLIN) // input_fd has data to read
+            {
+                char buffer[1024];
+                int bytes_read = read(fds[1].fd, buffer, sizeof(buffer)); // read from the input_fd
+                if (bytes_read == -1)
+                {
+                    perror("read");
+                    exit(EXIT_FAILURE);
+                }
+                if (bytes_read == 0)
+                {
+                    break;
+                }
+                if (write(fds[3].fd, buffer, bytes_read) == -1)
+                {
+                    perror("write");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            if (bvalue != NULL && fds[2].revents & POLLIN) // stdin has data to read
+            {
+                char buffer[1024];
+                int bytes_read = read(fds[2].fd, buffer, sizeof(buffer)); // read from stdin
+                if (bytes_read == -1)
+                {
+                    perror("read");
+                    exit(EXIT_FAILURE);
+                }
+                if (bytes_read == 0)
+                {
+                    break;
+                }
+                if (write(descriptors[1], buffer, bytes_read) == -1)
+                {
+                    perror("write");
+                    exit(EXIT_FAILURE);
+                }
+            }
         }
     }
 
-    RUN(evalue); // this getting the whole char of command to run
     close(descriptors[0]);
     close(descriptors[1]);
 
