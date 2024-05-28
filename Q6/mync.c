@@ -150,7 +150,7 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag, int flag)
     }
 }
 
-void TCP_client(int *descriptors, char *ip, int port,char *bvalue, int flag)
+void TCP_client(int *descriptors, char *ip, int port, char *bvalue, int flag)
 {
     // open a TCP client to the server
     int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -197,7 +197,9 @@ void TCP_client(int *descriptors, char *ip, int port,char *bvalue, int flag)
     if (flag == 0)
     {
         descriptors[1] = sock; // changing the output to form the socket to the client
-    } else {
+    }
+    else
+    {
         descriptors[0] = sock; // changing the input to form the socket to the client
     }
 
@@ -207,7 +209,7 @@ void TCP_client(int *descriptors, char *ip, int port,char *bvalue, int flag)
     }
 }
 
-void UDP_SERVER(int *descriptors, int port, int timeout,int flag)
+void UDP_SERVER(int *descriptors, int port, int timeout, int flag)
 {
     // open a UDP server to listen to the port
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -266,10 +268,12 @@ void UDP_SERVER(int *descriptors, int port, int timeout,int flag)
         exit(1);
     }
 
-    if (flag == 0) {
+    if (flag == 0)
+    {
         descriptors[0] = sockfd; // changing the descriptor to be the socket
     }
-    else {
+    else
+    {
         descriptors[1] = sockfd; // changing the descriptor to be the socket
     }
     alarm(timeout);
@@ -329,7 +333,6 @@ void UDP_CLIENT(int *descriptors, char *ip, int port, int flag)
     {
         descriptors[0] = sockfd; // changing the input to be the socket
     }
-
 }
 
 // UNIX Domain Socket
@@ -596,11 +599,11 @@ int main(int argc, char *argv[])
             int port = atoi(ivalue);
             if (tvalue != NULL)
             {
-                UDP_SERVER(descriptors, port, atoi(tvalue),0);
+                UDP_SERVER(descriptors, port, atoi(tvalue), 0);
             }
             else
             {
-                UDP_SERVER(descriptors, port, 0,0);
+                UDP_SERVER(descriptors, port, 0, 0);
             }
         }
         else if (strncmp(ivalue, "UDSSS", 5) == 0)
@@ -614,6 +617,22 @@ int main(int argc, char *argv[])
         {
             ivalue += 5; // skip the prefix to give the correct path.
             UDS_SERVER_DGRAM(ivalue, descriptors);
+        }
+
+        else if (strncmp(ivalue, "UDSCD", 5) == 0)
+        {
+            ivalue += 5; // skip the prefix to give the correct path.
+            UDS_CLIENT_DGRAM(ivalue, descriptors);
+            descriptors[0] = descriptors[1];
+            descriptors[1] = STDOUT_FILENO;
+        }
+
+        else if (strncmp(ivalue, "UDSCS", 5) == 0)
+        {
+            ivalue += 5; // skip the prefix to give the correct path.
+            UDS_CLIENT_STREAM(ivalue, descriptors);
+            descriptors[0] = descriptors[1];
+            descriptors[1] = STDOUT_FILENO;
         }
 
         else if (strncmp(ivalue, "TCPC", 4) == 0)
@@ -636,7 +655,7 @@ int main(int argc, char *argv[])
                 exit(1);
             }
             int port = atoi(port_server); // converting the port to integer
-            TCP_client(descriptors, ip_server, port, NULL , 1);
+            TCP_client(descriptors, ip_server, port, NULL, 1);
         }
 
         else if (strncmp(ivalue, "UDPC", 4) == 0)
@@ -691,7 +710,7 @@ int main(int argc, char *argv[])
                 exit(1);
             }
             int port = atoi(port_server); // converting the port to integer
-            TCP_client(descriptors, ip_server,port,NULL ,0);
+            TCP_client(descriptors, ip_server, port, NULL, 0);
         }
         else if (strncmp(ovalue, "UDPC", 4) == 0)
         {
@@ -726,26 +745,41 @@ int main(int argc, char *argv[])
             ovalue += 5; // skip the "UDSCS" prefix
             UDS_CLIENT_STREAM(ovalue, descriptors);
         }
+
         else if (strncmp(ovalue, "TCPS", 4) == 0)
         {
             ovalue += 4; // skip the "TCPS" prefix
             int port = atoi(ovalue);
             TCP_SERVER(descriptors, port, NULL, 1);
         }
-        else if (strncmp(ovalue,"UDPS",4)==0)
+        else if (strncmp(ovalue, "UDPS", 4) == 0)
         {
             ovalue += 4; // skip the "UDPS" prefix
             int port = atoi(ovalue);
             if (tvalue != NULL)
             {
-                UDP_SERVER(descriptors, port, atoi(tvalue),1);
+                UDP_SERVER(descriptors, port, atoi(tvalue), 1);
             }
             else
             {
-                UDP_SERVER(descriptors, port, 0,1);
+                UDP_SERVER(descriptors, port, 0, 1);
             }
         }
-        
+        else if (strncmp(ovalue, "UDSSS", 5) == 0)
+        {
+            ovalue += 5; // skip the "UDSSS" prefix
+            UDS_SERVER_STREAM(ovalue, descriptors);
+            descriptors[1] = descriptors[0]; // sets descriptors[1] to the socket
+            descriptors[0] = STDIN_FILENO;
+        }
+        else if (strncmp(ovalue, "UDSSD", 5) == 0)
+        {
+            ovalue += 5; // skip the "UDSSD" prefix
+            UDS_SERVER_DGRAM(ovalue, descriptors);
+            descriptors[1] = descriptors[0]; // sets descriptors[1] to the socket
+            descriptors[0] = STDIN_FILENO;
+        }
+
         else
         {
             fprintf(stderr, "o_value: Invalid server kind.\n");
@@ -762,7 +796,7 @@ int main(int argc, char *argv[])
             int port = atoi(bvalue);
             TCP_SERVER(descriptors, port, bvalue, 0);
         }
-        else if (strncmp(bvalue,"TCPC",4)==0)
+        else if (strncmp(bvalue, "TCPC", 4) == 0)
         {
             bvalue += 4; // skip the "TCPC" prefix
             char *ip_server = strtok(bvalue, ",");
@@ -782,7 +816,7 @@ int main(int argc, char *argv[])
                 exit(1);
             }
             int port = atoi(port_server); // converting the port to integer
-            TCP_client(descriptors, ip_server, port, bvalue , 0);
+            TCP_client(descriptors, ip_server, port, bvalue, 0);
         }
         else if (strncmp(bvalue, "UDPC", 4) == 0)
         {
@@ -805,27 +839,40 @@ int main(int argc, char *argv[])
             int port = atoi(port_server); // converting the port to integer
             UDP_CLIENT(descriptors, ip_server, port, 0);
             descriptors[0] = descriptors[1]; // sets descriptors[0] to the socket
-
         }
         else if (strncmp(bvalue, "UDPS", 4) == 0)
         {
             bvalue += 4; // skip the "UDPS" prefix
             int port = atoi(bvalue);
-            UDP_SERVER(descriptors, port, 0,0); // sets descriptors[0] to the socket
-            descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
+            UDP_SERVER(descriptors, port, 0, 0); // sets descriptors[0] to the socket
+            descriptors[1] = descriptors[0];     // sets descriptors[1] to the socket
         }
-        else if (strncmp(bvalue, "UDSSD", 5) == 0)
+        else if (strncmp(bvalue, "UDSSD", 5) == 0) // SERVER DATAGRAM
         {
             bvalue += 5; // skip the "UDSSD" prefix
             UDS_SERVER_DGRAM(bvalue, descriptors);
             descriptors[1] = descriptors[0]; // sets descriptors[1] to the socket
         }
-        else if (strncmp(bvalue, "UDSSS", 5) == 0)
+        else if (strncmp(bvalue, "UDSSS", 5) == 0) // SERVER STREAM
         {
             bvalue += 5; // skip the "UDSSS" prefix
             UDS_SERVER_STREAM(bvalue, descriptors);
             descriptors[1] = descriptors[0]; // sets descriptors[1] to the socket
         }
+
+        else if (strncmp(bvalue, "UDSCS", 5) == 0)
+        {
+            bvalue += 5; // skip the "UDSCS" prefix
+            UDS_CLIENT_STREAM(bvalue, descriptors);
+            descriptors[0] = descriptors[1]; // sets descriptors[0] to the socket
+        }
+        else if (strncmp(bvalue, "UDSCD", 5) == 0)
+        {
+            bvalue += 5; // skip the "UDSCD" prefix
+            UDS_CLIENT_DGRAM(bvalue, descriptors);
+            descriptors[0] = descriptors[1]; // sets descriptors[0] to the socket
+        }
+
         else
         {
             fprintf(stderr, "b_value: Invalid server kind.\n");
