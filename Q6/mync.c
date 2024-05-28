@@ -488,7 +488,7 @@ int main(int argc, char *argv[]) {
         if (strncmp(ivalue, "TCPS", 4) == 0) {
             ivalue += 4;
             int port = atoi(ivalue);
-            TCP_SERVER(descriptors, port, NULL, 1);
+            TCP_SERVER(descriptors, port, NULL, 0);
         } else if (strncmp(ivalue, "UDPS", 4) == 0) {
             ivalue += 4;
             int port = atoi(ivalue);
@@ -567,8 +567,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (ovalue != NULL)  // changin the output to the one who we're addressing
-    {
+    if (ovalue != NULL) {  // changin the output to the one who we're addressing
+
         if (strncmp(ovalue, "TCPC", 4) == 0) {
             ovalue += 4;  // skip the "TCPS" prefix
             char *ip_server = strtok(ovalue, ",");
