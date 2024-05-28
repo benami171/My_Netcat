@@ -150,7 +150,7 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag, int flag)
     }
 }
 
-void TCP_client(int *descriptors, char *ip, int port, int flag)
+void TCP_client(int *descriptors, char *ip, int port,char *bvalue, int flag)
 {
     // open a TCP client to the server
     int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -197,9 +197,11 @@ void TCP_client(int *descriptors, char *ip, int port, int flag)
     if (flag == 0)
     {
         descriptors[1] = sock; // changing the output to form the socket to the client
+    } else {
+        descriptors[0] = sock; // changing the input to form the socket to the client
     }
 
-    if (flag != 0)
+    if (bvalue != NULL)
     {
         descriptors[0] = sock; // changing the input to form the socket to the client
     }
@@ -321,14 +323,13 @@ void UDP_CLIENT(int *descriptors, char *ip, int port, int flag)
 
     if (flag == 0)
     {
-        printf("flag is 0\n");
         descriptors[1] = sockfd; // changing the output to be the socket
     }
     else
     {
-        printf("flag is not 0\n");
         descriptors[0] = sockfd; // changing the input to be the socket
     }
+
 }
 
 // UNIX Domain Socket
@@ -635,7 +636,7 @@ int main(int argc, char *argv[])
                 exit(1);
             }
             int port = atoi(port_server); // converting the port to integer
-            TCP_client(descriptors, ip_server, port, 1);
+            TCP_client(descriptors, ip_server, port, NULL , 1);
         }
 
         else if (strncmp(ivalue, "UDPC", 4) == 0)
@@ -690,7 +691,7 @@ int main(int argc, char *argv[])
                 exit(1);
             }
             int port = atoi(port_server); // converting the port to integer
-            TCP_client(descriptors, ip_server, port, 0);
+            TCP_client(descriptors, ip_server,port,NULL ,0);
         }
         else if (strncmp(ovalue, "UDPC", 4) == 0)
         {
@@ -760,6 +761,51 @@ int main(int argc, char *argv[])
             bvalue += 4; // skip the "TCPS" prefix
             int port = atoi(bvalue);
             TCP_SERVER(descriptors, port, bvalue, 0);
+        }
+        else if (strncmp(bvalue,"TCPC",4)==0)
+        {
+            bvalue += 4; // skip the "TCPC" prefix
+            char *ip_server = strtok(bvalue, ",");
+            // getting the ip like in the example TCPClocalhost,8080
+            if (ip_server == NULL)
+            {
+                fprintf(stderr, "Invalid server IP\n");
+                sockets_terminator(descriptors);
+                exit(1);
+            }
+            // get the rest of the string after the comma, this is the port
+            char *port_server = strtok(NULL, ",");
+            if (port_server == NULL)
+            {
+                fprintf(stderr, "Invalid server port\n");
+                sockets_terminator(descriptors);
+                exit(1);
+            }
+            int port = atoi(port_server); // converting the port to integer
+            TCP_client(descriptors, ip_server, port, bvalue , 0);
+        }
+        else if (strncmp(bvalue, "UDPC", 4) == 0)
+        {
+            bvalue += 4; // skip the "UDPC" prefix
+            char *ip_server = strtok(bvalue, ",");
+            if (ip_server == NULL)
+            {
+                fprintf(stderr, "Invalid server IP\n");
+                sockets_terminator(descriptors);
+                exit(1);
+            }
+
+            char *port_server = strtok(NULL, ",");
+            if (port_server == NULL)
+            {
+                fprintf(stderr, "Invalid server port\n");
+                sockets_terminator(descriptors);
+                exit(1);
+            }
+            int port = atoi(port_server); // converting the port to integer
+            UDP_CLIENT(descriptors, ip_server, port, 0);
+            descriptors[0] = descriptors[1]; // sets descriptors[0] to the socket
+
         }
         else if (strncmp(bvalue, "UDPS", 4) == 0)
         {
