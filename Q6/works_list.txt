@@ -1,16 +1,37 @@
+## -e -i ##
+
+./mync -e "./ttt 123456789" -i TCPS9876           || nc localhost 9876
+./mync -e "./ttt 123456789" -i TCPC127.0.0.1,9876 || nc -l -p 9876
+./mync -e "./ttt 123456789" -i UDPS9876           || nc -u localhost 9876 + CLIENT sey hello.
+./mync -e "./ttt 123456789" -i UDPC127.0.0.1,9876 ||nc -u -l -p 9876
+
+## -e -o ##
+./mync -e "./ttt 123456789" -o TCPS9876           || nc localhost 9876
+./mync -e "./ttt 123456789" -o TCPC127.0.0.1,9876 || nc -l -p 9876
+./mync -e "./ttt 123456789" -o UDPS9876           || nc -u localhost 9876 + CLIENT sey hello.
+./mync -e "./ttt 123456789" -o UDPC127.0.0.1,9876 ||nc -u -l -p 9876
+
+## -e -b ##
+
+./mync -e "./ttt 123456789" -b TCPS9876           || nc localhost 9876
+./mync -e "./ttt 123456789" -b TCPC127.0.0.1,9876 || nc -l -p 9876
+./mync -e "./ttt 123456789" -b UDPS9876           || nc -u localhost 9876 + CLIENT sey hello.
+./mync -e "./ttt 123456789" -b UDPC127.0.0.1,9876 ||nc -u -l -p 9876
+
+## -e -i -o ##
+
 ## -i ##
 
-./mync -e "./ttt 123456789" -i TCPS9876
-./mync -e "./ttt 123456789" -i TCPC127.0.0.1,9876
-./mync -e "./ttt 123456789" -i UDPS9876 - send hello first from client.
-./mync -e "./ttt 123456789" -i UDPC127.0.0.1,9876 
+./mync  -i TCPS9876           || nc localhost 9876
+./mync  -i TCPC127.0.0.1,9876 || nc -l -p 9876
+./mync  -i UDPS9876           || nc -u localhost 9876 + CLIENT sey hello.
+./mync  -i UDPC127.0.0.1,9876 ||nc -u -l -p 9876
 
 ## -o ##
-
-./mync -e "./ttt 123456789" -o UDPC127.0.0.1,9876 
-./mync -e "./ttt 123456789" -o UDPS9876 - send hello first from client.
-./mync -e "./ttt 123456789" -o TCPC127.0.0.1,9876
-./mync -e "./ttt 123456789" -o TCPS9876
+./mync  -o TCPS9876           || nc localhost 9876
+./mync  -o TCPC127.0.0.1,9876 || nc -l -p 9876
+./mync  -o UDPS9876           || nc -u localhost 9876 + CLIENT sey hello.
+./mync  -o UDPC127.0.0.1,9876 ||nc -u -l -p 9876
 
 ## -b ##
 
@@ -18,3 +39,5 @@
 ./mync -e "./ttt 123456789" -b TCPC127.0.0.1,9876 || nc -l -p 9876
 ./mync -e "./ttt 123456789" -b UDPS9876           || nc -u localhost 9876 + CLIENT sey hello.
 ./mync -e "./ttt 123456789" -b UDPC127.0.0.1,9876 ||nc -u -l -p 9876
+
+## -i -o ##
