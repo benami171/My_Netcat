@@ -12,4 +12,4 @@ ttt.o:
 	$(CC) $(CFlags) -c ttt.c -o ttt.o
 
 clean:
-	rm -f *.o ttt
+	rm -f *.o ttt *.gcno *.gcda *.gcov
