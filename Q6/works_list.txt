@@ -1,7 +1,7 @@
 ## -e -i ##
 
 ./mync -e "./ttt 123456789" -i TCPS9876           || nc localhost 9876
-./mync -e "./ttt 123456789" -i TCPC127.0.0.1,9876 || nc -l -p 9876
+./mync -e "./ttt 123456789" -i TCPClocalhost      || nc -l -p 9876
 ./mync -e "./ttt 123456789" -i UDPS9876           || nc -u localhost 9876 + CLIENT sey hello.
 ./mync -e "./ttt 123456789" -i UDPC127.0.0.1,9876 || nc -u -l -p 9876
 

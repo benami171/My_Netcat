@@ -148,6 +148,10 @@ void TCP_client(int *descriptors, char *ip, int port, char *bvalue, int flag) {
         exit(1);
     }
 
+    if (strncmp(ip, "localhost", 9) == 0) {
+        ip = "127.0.0.1";
+    }
+
     if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
         perror("Invalid address/ Address not supported");
         sockets_terminator(descriptors);
@@ -524,7 +528,7 @@ int main(int argc, char *argv[]) {
 
         else if (strncmp(ivalue, "TCPC", 4) == 0) {
             ivalue += 4;  // skip the "TCPS" prefix
-            char *ip_server = strtok(ivalue, ",");
+            char *ip_server = strtok(ivalue, ",");            
             // getting the ip like in the example TCPClocalhost,8080
             if (ip_server == NULL) {
                 fprintf(stderr, "Invalid server IP\n");
