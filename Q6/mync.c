@@ -67,7 +67,7 @@ void sockets_terminator(int *descriptors) {
 
 void handle_alarm(int sig) {
     // Terminate the process
-    exit(0);
+    exit(1);
 }
 
 // sending the descriptor to handel, and the portnumber to open the server on
