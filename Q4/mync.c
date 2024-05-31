@@ -16,7 +16,9 @@
 
 void RUN(char *args_as_string)
 {
-    // tokenize the string - split by space
+    // tokenize the string - split by space || ./mync -e "./ttt 123654789" -i TCPS89569 
+
+
     char *token = strtok(args_as_string, " ");
 
     if (token == NULL)

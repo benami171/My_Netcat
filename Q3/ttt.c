@@ -123,35 +123,7 @@ int check_input(char *input)
 
     return 0; // No errors
 }
-/**
- * void validate_input(const char *input) {
-    int counter[9] = {0};
-    while (*input) {
-        if (*input < '1' || *input > '9') {
-            printf("Invalid input - input should be between 1 and 9\n");
-            printf("got: %c, ascii: %d\n", *input, *input);
-            exit(1);
-        }
 
-        counter[*input - '1']++;
-        if (counter[*input - '1'] > 1) {
-            printf("Invalid input - duplicate number %c\n", *input);
-            exit(1);
-        }
-        input++;
-    }
-
-    // check if we have all the numbers
-    for (int i = 0; i < 9; i++) {
-        if (counter[i] != 1) {
-            printf("Invalid input - missing number %d\n", i + 1);
-            exit(1);
-        }
-    }
-}
-
- *
-*/
 int main(int argc, char *argv[])
 {
     if (argc != 2)

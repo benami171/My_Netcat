@@ -84,6 +84,7 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag, int flag) {
     int optval = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
         perror("setsockopt");
+        close(sockfd);
         sockets_terminator(descriptors);
         exit(EXIT_FAILURE);
     }
@@ -95,6 +96,7 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag, int flag) {
 
     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("bind");
+        close(sockfd);
         sockets_terminator(descriptors);
         exit(EXIT_FAILURE);
     }
@@ -124,6 +126,7 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag, int flag) {
     if (b_flag != NULL) {
         descriptors[1] = client_fd;
     }
+    close(sockfd);
 }
 
 void TCP_client(int *descriptors, char *ip, int port, char *bvalue, int flag) {
@@ -361,74 +364,70 @@ void UDS_CLIENT_STREAM(char *path, int *descriptors) {
     descriptors[1] = sockfd;  // changing the output to be the socket
 }
 
-// UNIX Domain Socket for datagram
-void UDS_SERVER_DGRAM(char *path, int *descriptors) {
-    // opening a UDS server
-    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);  // for datagram like udp protocol
-    if (sockfd == -1) {
-        perror("error creating socket");
-        sockets_terminator(descriptors);
-        exit(1);
-    }
+// // UNIX Domain Socket for datagram
+// void UDS_SERVER_DGRAM(char *path, int *descriptors) {
+//     // opening a UDS server
+//     int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);  // for datagram like udp protocol
+//     if (sockfd == -1) {
+//         perror("error creating socket");
+//         sockets_terminator(descriptors);
+//         exit(1);
+//     }
 
-    printf("1.UDS socket created\n");
-    struct sockaddr_un server_addr;
-    server_addr.sun_family = AF_UNIX;
-    strcpy(server_addr.sun_path, path);
+//     printf("1.UDS socket created\n");
+//     struct sockaddr_un server_addr;
+//     server_addr.sun_family = AF_UNIX;
+//     strcpy(server_addr.sun_path, path);
 
-    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
-        perror("error binding socket");
-        sockets_terminator(descriptors);
-        exit(1);
-    }
+//     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+//         perror("error binding socket");
+//         sockets_terminator(descriptors);
+//         exit(1);
+//     }
 
-    printf("2.UDS binded\n");
+//     printf("2.UDS binded\n");
 
-    struct sockaddr_un client_addr;
-    socklen_t client_len = sizeof(client_addr);
+//     struct sockaddr_un client_addr;
+//     socklen_t client_len = sizeof(client_addr);
 
-    char buffer[1024];
-    int numbytes = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_len);
-    if (numbytes == -1) {
-        perror("error receiving data");
-        sockets_terminator(descriptors);
-        exit(1);
-    }
+//     char buffer[1024];
+//     int numbytes = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_len);
+//     if (numbytes == -1) {
+//         perror("error receiving data");
+//         sockets_terminator(descriptors);
+//         exit(1);
+//     }
 
-    printf("3.UDS received data\n");
-    descriptors[0] = sockfd;  // changing the input to be the socket
-}
+//     printf("3.UDS received data\n");
+//     descriptors[0] = sockfd;  // changing the input to be the socket
+// }
 
-// UNIX Domain Socket for datagram
-void UDS_CLIENT_DGRAM(char *path, int *descriptors) {
-    // open a UDS client to the server
-    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
-    if (sockfd == -1) {
-        perror("error creating socket");
-        sockets_terminator(descriptors);
-        exit(1);
-    }
+// // UNIX Domain Socket for datagram
+// void UDS_CLIENT_DGRAM(char *path, int *descriptors) {
+//     // open a UDS client to the server
+//     int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+//     if (sockfd == -1) {
+//         perror("error creating socket");
+//         sockets_terminator(descriptors);
+//         exit(1);
+//     }
 
-    printf("UDS client\n");
-    fflush(stdout);
+//     printf("UDS client\n");
+//     fflush(stdout);
 
-    struct sockaddr_un server_addr;
-    server_addr.sun_family = AF_UNIX;
-    strcpy(server_addr.sun_path, path);
+//     struct sockaddr_un server_addr;
+//     server_addr.sun_family = AF_UNIX;
+//     strcpy(server_addr.sun_path, path);
 
-    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
-        perror("error connecting to server");
-        sockets_terminator(descriptors);
-        exit(1);
-    }
+//     if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+//         perror("error connecting to server");
+//         sockets_terminator(descriptors);
+//         exit(1);
+//     }
 
-    descriptors[1] = sockfd;  // changing the output to be the socket
-}
+//     descriptors[1] = sockfd;  // changing the output to be the socket
+// }
 
-// for -i  nc localhost <port>
-// for -o  nc -l -p <port>
-// for -b  nc -l -p <port> | nc localhost <port>
-// for -e  <program> <arguments>
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -507,17 +506,17 @@ int main(int argc, char *argv[]) {
             UDS_SERVER_STREAM(ivalue, descriptors);
         }
 
-        else if (strncmp(ivalue, "UDSSD", 5) == 0) {
-            ivalue += 5;  // skip the prefix to give the correct path.
-            UDS_SERVER_DGRAM(ivalue, descriptors);
-        }
+        // else if (strncmp(ivalue, "UDSSD", 5) == 0) {
+        //     ivalue += 5;  // skip the prefix to give the correct path.
+        //     UDS_SERVER_DGRAM(ivalue, descriptors);
+        // }
 
-        else if (strncmp(ivalue, "UDSCD", 5) == 0) {
-            ivalue += 5;  // skip the prefix to give the correct path.
-            UDS_CLIENT_DGRAM(ivalue, descriptors);
-            descriptors[0] = descriptors[1];
-            descriptors[1] = STDOUT_FILENO;
-        }
+        // else if (strncmp(ivalue, "UDSCD", 5) == 0) {
+        //     ivalue += 5;  // skip the prefix to give the correct path.
+        //     UDS_CLIENT_DGRAM(ivalue, descriptors);
+        //     descriptors[0] = descriptors[1];
+        //     descriptors[1] = STDOUT_FILENO;
+        // }
 
         else if (strncmp(ivalue, "UDSCS", 5) == 0) {
             ivalue += 5;  // skip the prefix to give the correct path.
@@ -608,11 +607,13 @@ int main(int argc, char *argv[]) {
             }
             int port = atoi(port_server);  // converting the port to integer
             UDP_CLIENT(descriptors, ip_server, port, 0);
-        } else if (strncmp(ovalue, "UDSCD", 5) == 0) {
-            // unix domain sockets - client - datacram connect to path.
-            ovalue += 5;  // skip the "UDSCD" prefix
-            UDS_CLIENT_DGRAM(ovalue, descriptors);
-        } else if (strncmp(ovalue, "UDSCS", 5) == 0) {
+        } 
+        // else if (strncmp(ovalue, "UDSCD", 5) == 0) {
+        //     // unix domain sockets - client - datacram connect to path.
+        //     ovalue += 5;  // skip the "UDSCD" prefix
+        //     UDS_CLIENT_DGRAM(ovalue, descriptors);
+        // } 
+        else if (strncmp(ovalue, "UDSCS", 5) == 0) {
             // unix domain sockets - client - stream connect to path.
             ovalue += 5;  // skip the "UDSCS" prefix
             UDS_CLIENT_STREAM(ovalue, descriptors);
@@ -635,12 +636,13 @@ int main(int argc, char *argv[]) {
             UDS_SERVER_STREAM(ovalue, descriptors);
             descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
             descriptors[0] = STDIN_FILENO;
-        } else if (strncmp(ovalue, "UDSSD", 5) == 0) {
-            ovalue += 5;  // skip the "UDSSD" prefix
-            UDS_SERVER_DGRAM(ovalue, descriptors);
-            descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
-            descriptors[0] = STDIN_FILENO;
-        }
+        } 
+        // else if (strncmp(ovalue, "UDSSD", 5) == 0) {
+        //     ovalue += 5;  // skip the "UDSSD" prefix
+        //     UDS_SERVER_DGRAM(ovalue, descriptors);
+        //     descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
+        //     descriptors[0] = STDIN_FILENO;
+        // }
 
         else {
             fprintf(stderr, "o_value: Invalid server kind.\n");
@@ -696,12 +698,14 @@ int main(int argc, char *argv[]) {
             int port = atoi(bvalue);
             UDP_SERVER(descriptors, port, 0, 0);      // sets descriptors[0] to the socket
             descriptors[1] = descriptors[0];          // sets descriptors[1] to the socket
-        } else if (strncmp(bvalue, "UDSSD", 5) == 0)  // SERVER DATAGRAM
-        {
-            bvalue += 5;  // skip the "UDSSD" prefix
-            UDS_SERVER_DGRAM(bvalue, descriptors);
-            descriptors[1] = descriptors[0];          // sets descriptors[1] to the socket
-        } else if (strncmp(bvalue, "UDSSS", 5) == 0)  // SERVER STREAM
+        } 
+        // else if (strncmp(bvalue, "UDSSD", 5) == 0)  // SERVER DATAGRAM
+        // {
+        //     bvalue += 5;  // skip the "UDSSD" prefix
+        //     UDS_SERVER_DGRAM(bvalue, descriptors);
+        //     descriptors[1] = descriptors[0];          // sets descriptors[1] to the socket
+        // } 
+        else if (strncmp(bvalue, "UDSSS", 5) == 0)  // SERVER STREAM
         {
             bvalue += 5;  // skip the "UDSSS" prefix
             UDS_SERVER_STREAM(bvalue, descriptors);
@@ -712,11 +716,12 @@ int main(int argc, char *argv[]) {
             bvalue += 5;  // skip the "UDSCS" prefix
             UDS_CLIENT_STREAM(bvalue, descriptors);
             descriptors[0] = descriptors[1];  // sets descriptors[0] to the socket
-        } else if (strncmp(bvalue, "UDSCD", 5) == 0) {
-            bvalue += 5;  // skip the "UDSCD" prefix
-            UDS_CLIENT_DGRAM(bvalue, descriptors);
-            descriptors[0] = descriptors[1];  // sets descriptors[0] to the socket
-        }
+        } 
+        // else if (strncmp(bvalue, "UDSCD", 5) == 0) {
+        //     bvalue += 5;  // skip the "UDSCD" prefix
+        //     UDS_CLIENT_DGRAM(bvalue, descriptors);
+        //     descriptors[0] = descriptors[1];  // sets descriptors[0] to the socket
+        // }
 
         else {
             fprintf(stderr, "b_value: Invalid server kind.\n");
@@ -752,6 +757,7 @@ int main(int argc, char *argv[]) {
         RUN(evalue);  // this gets the whole command string and runs it
     } else            //(evalue == NULL)
     {
+        printf("No -e command provided\n");
         struct pollfd fds[4];  // poll file descriptors
         int nfds = 4;          // number of file descriptors
 

@@ -171,22 +171,7 @@ int main(int argc, char *argv[])
             char input[10];
             do
             {
-                // if (scanf("%d", &move) != 1)
-                // {
-                //     printf("Invalid input. Please enter a number between 1 and 9.\n");
-                //     while (getchar() != '\n')
-                //         ; // clear input buffer
-                //     continue;
-                // }
-
-                // char ch;
-                // if ((ch = getchar()) != '\n')
-                // {
-                //     printf("Invalid input. Please enter only one number at a time.\n");
-                //     while (getchar() != '\n')
-                //         ; // clear input buffer
-                //     continue;
-                // }
+                
                 if (fgets(input, sizeof(input), stdin) == NULL)
                 {
                     printf("Error reading input. Please try again.\n");
@@ -250,4 +235,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-// TODO add fflush(stdout) after every printf to clean the buffer

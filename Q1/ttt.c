@@ -235,4 +235,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-// TODO add fflush(stdout) after every printf to clean the buffer
