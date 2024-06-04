@@ -1,3 +1,6 @@
+when i/o - tcps / udps: first write the command, and than open client in seperate terminal. if i-tcpc/udpc do the opposite.
+when -i tcps -o tcpc: first open server for o, than write command, then open client for i 
+
 ## -e -i ##
 
 ./mync -e "./ttt 123456789" -i TCPS9876           || nc localhost 9876
