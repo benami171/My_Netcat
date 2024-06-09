@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
                 {
                     printf("Error reading input. Please try again.\n");
                     fflush(stdout);
-
+                    exit(1);
                     continue;
                 }
 
