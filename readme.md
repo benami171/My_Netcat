@@ -65,7 +65,7 @@ Oppening a TCP client and wait for a input from a server. output go to the clien
 #server
 nc -l -p 9876
 #client
-/mync -e "./ttt 123456789" -o TCPC127.0.0.1,9876 || nc -l -p 9876
+/mync -e "./ttt 123456789" -o TCPC127.0.0.1,9876
 ```
 For the whole command list you can check in
 [Q6-worklist](./Q6/works_list.txt)
