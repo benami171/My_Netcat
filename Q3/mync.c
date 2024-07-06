@@ -26,7 +26,12 @@ void RUN(char *args_as_string) {
     // get the rest of the arguments
     while (token != NULL) {
         token = strtok(NULL, " ");                                // get the next token (NULL - take the next token from the previous string)
-        args = (char **)realloc(args, (n + 1) * sizeof(char *));  // allocate memory for the new argument
+        char **temp = (char **)realloc(args, (n + 1) * sizeof(char *));  // allocate memory for the new argument
+        if(temp == NULL){
+            free(args);
+            exit(EXIT_FAILURE);
+        }
+        args = temp;
         args[n++] = token;                                        // add the new argument and increment the number of arguments
     }
 
