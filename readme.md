@@ -1,37 +1,46 @@
 # MyNetcat program
 
-In this project we;ve created our own netcat program.  
-It's open communications in differetn kinds of protocols.  
-We can route our input and outout also between users, be oppening clients and servers.
+## Introduction
+
+In this project, we developed our own netcat program. This program supports open communications across various protocols, enabling routing of standard input (stdin) and standard output (stdout) through socket file descriptors based on the specified flags. This allows us to facilitate communication between users by opening clients and servers.
+
+## Authors
+
+This project was developed collaboratively by:
+- [Gal Ben Ami](https://github.com/benami171)
+- [Chanan Helman](https://github.com/chanan-hash)
 
 ## Flags
-1. -e, executes a shell command
-2. -i, get input from a socket
-3. -o, refering the output to a socket
-4. -b, input and output go to the same socket
-5. -t, in **UDP** protocol it sets timeout for the execution of the program
+1. -e: Executes a shell command
+2. -i: Gets input from a socket.
+3. -o: Directs the output to a socket.
+4. -b: Sends input and output to the same socket.
+5. -t: Sets a timeout for the execution of the program when using the **UDP** protocol.
 
 ## Protocols
-This program supports 4 kind of protocols:
+This program supports four types of protocols:
+
 1. **TCP**
 2. **UDP**
 3. **UNIX Domain Socket Stream**
 4. **UNIX Domain Socket Datagram**
 
-we can also mix the protocols, opening a **UDP** server, and connecting with **TCP** client.
+You can also mix protocols, for example, by opening a **UDP** server and connecting with a **TCP** client.
 
-> NOTE: All datagram sockets (UDP and UDS datagram) will be wait for a dummy input from the client for accepting the connection, and then start the execution of the program.
+> Note: All datagram sockets (UDP and UDS datagram) will wait for dummy input from the client to accept the connection before starting the execution of the program.
+
 
 ## How to use
-First clone the repository, here the command
+First, clone the repository using the following command:
+
 ```bash
 git clone https://github.com/chanan-hash/OS-Ex2.git
 ```
-Each file has it's own ```makefile``` for each step. the final one is in ```Q6``` folder. It has all the protocols
-we have also a recursive ```makefile``` if needed.
+Each folder has its own `Makefile` for each step. The final version is in the `Q6` folder, which includes all the protocols. A recursive `Makefile` is also available if needed.
 
 ### sketch for the commands
-to use the socket we will send them after the flag, in this format:
+To use the sockets, follow this format after the flag:
+
 1. TCP server: `TCPS<PORT>`
 2. TCP client: `TCPC<HOST>,<PORT>`
 3. UDP server: `UDPS<PORT>`
@@ -41,17 +50,15 @@ to use the socket we will send them after the flag, in this format:
 7. UDS datagram server: `UDSSD<PATH>`
 8. UDS datagram client: `UDSCD<PATH>`
 
-## Checking
-To check and comunicate with our program, we;ve used also linux netcat, to save as wrting more clients and server for each protocol for checkups.
-The list of command and how to use them are in ```Q6``` folder under ***work_list.txt***
+## Testing
+To test and communicate with our program, we used Linux netcat to avoid writing separate clients and servers for each protocol. The list of commands and usage instructions are in the ```Q6``` folder under ***work_list.txt***.
 
 ### -e flag
-in all of the examples below, when we use the -e flag, we will execute the command a tik tak toe game, that we've implemented, this is in ```ttt.c``` file in each folder.  
-
-executing the command without -e flag, will just refer the communication between side without special program, like a chat.
+In the examples below, the `-e`  flag is used to execute a command for a tic-tac-toe game implemented in the ```ttt.c```  file in each folder. Executing the command without the `-e` flag will simply facilitate commuincation between two ends, like a chat.
 
 ## Command exmpales:
-Oppening a TCP server and wait for a input from a client. output go to stdout
+Opening a TCP server and waiting for input from a client. Output goes to stdout:
+
 ```bash
 # server
 ./mync -e "./ttt 123456789" -i TCPS9876
