@@ -31,9 +31,14 @@ void RUN(char *args_as_string) {
 
     // get the rest of the arguments
     while (token != NULL) {
-        token = strtok(NULL, " ");                                // get the next token (NULL - take the next token from the previous string)
-        args = (char **)realloc(args, (n + 1) * sizeof(char *));  // allocate memory for the new argument
-        args[n++] = token;                                        // add the new argument and increment the number of arguments
+        token = strtok(NULL, " ");                                       // get the next token (NULL - take the next token from the previous string)
+        char **temp = (char **)realloc(args, (n + 1) * sizeof(char *));  // allocate memory for the new argument
+        if (temp == NULL) {
+            free(args);
+            exit(EXIT_FAILURE);
+        }
+        args = temp;
+        args[n++] = token;  // add the new argument and increment the number of arguments
     }
 
     // fork and execute the program
@@ -428,7 +433,6 @@ void UDS_CLIENT_STREAM(char *path, int *descriptors) {
 //     descriptors[1] = sockfd;  // changing the output to be the socket
 // }
 
-
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <port>\n", argv[0]);
@@ -527,7 +531,7 @@ int main(int argc, char *argv[]) {
 
         else if (strncmp(ivalue, "TCPC", 4) == 0) {
             ivalue += 4;  // skip the "TCPS" prefix
-            char *ip_server = strtok(ivalue, ",");            
+            char *ip_server = strtok(ivalue, ",");
             // getting the ip like in the example TCPClocalhost,8080
             if (ip_server == NULL) {
                 fprintf(stderr, "Invalid server IP\n");
@@ -607,12 +611,12 @@ int main(int argc, char *argv[]) {
             }
             int port = atoi(port_server);  // converting the port to integer
             UDP_CLIENT(descriptors, ip_server, port, 0);
-        } 
+        }
         // else if (strncmp(ovalue, "UDSCD", 5) == 0) {
         //     // unix domain sockets - client - datacram connect to path.
         //     ovalue += 5;  // skip the "UDSCD" prefix
         //     UDS_CLIENT_DGRAM(ovalue, descriptors);
-        // } 
+        // }
         else if (strncmp(ovalue, "UDSCS", 5) == 0) {
             // unix domain sockets - client - stream connect to path.
             ovalue += 5;  // skip the "UDSCS" prefix
@@ -636,7 +640,7 @@ int main(int argc, char *argv[]) {
             UDS_SERVER_STREAM(ovalue, descriptors);
             descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
             descriptors[0] = STDIN_FILENO;
-        } 
+        }
         // else if (strncmp(ovalue, "UDSSD", 5) == 0) {
         //     ovalue += 5;  // skip the "UDSSD" prefix
         //     UDS_SERVER_DGRAM(ovalue, descriptors);
@@ -696,15 +700,15 @@ int main(int argc, char *argv[]) {
         } else if (strncmp(bvalue, "UDPS", 4) == 0) {
             bvalue += 4;  // skip the "UDPS" prefix
             int port = atoi(bvalue);
-            UDP_SERVER(descriptors, port, 0, 0);      // sets descriptors[0] to the socket
-            descriptors[1] = descriptors[0];          // sets descriptors[1] to the socket
-        } 
+            UDP_SERVER(descriptors, port, 0, 0);  // sets descriptors[0] to the socket
+            descriptors[1] = descriptors[0];      // sets descriptors[1] to the socket
+        }
         // else if (strncmp(bvalue, "UDSSD", 5) == 0)  // SERVER DATAGRAM
         // {
         //     bvalue += 5;  // skip the "UDSSD" prefix
         //     UDS_SERVER_DGRAM(bvalue, descriptors);
         //     descriptors[1] = descriptors[0];          // sets descriptors[1] to the socket
-        // } 
+        // }
         else if (strncmp(bvalue, "UDSSS", 5) == 0)  // SERVER STREAM
         {
             bvalue += 5;  // skip the "UDSSS" prefix
@@ -716,7 +720,7 @@ int main(int argc, char *argv[]) {
             bvalue += 5;  // skip the "UDSCS" prefix
             UDS_CLIENT_STREAM(bvalue, descriptors);
             descriptors[0] = descriptors[1];  // sets descriptors[0] to the socket
-        } 
+        }
         // else if (strncmp(bvalue, "UDSCD", 5) == 0) {
         //     bvalue += 5;  // skip the "UDSCD" prefix
         //     UDS_CLIENT_DGRAM(bvalue, descriptors);

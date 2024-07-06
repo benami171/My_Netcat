@@ -1,93 +1,83 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sys/wait.h>
-#include <string.h>
-#include <getopt.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <signal.h>
+#include <getopt.h>
 #include <netdb.h>
+#include <netinet/in.h>
 #include <poll.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
-void RUN(char *args_as_string)
-{
-    // tokenize the string - split by space || ./mync -e "./ttt 123654789" -i TCPS89569 
-
+void RUN(char *args_as_string) {
+    // tokenize the string - split by space || ./mync -e "./ttt 123654789" -i TCPS89569
 
     char *token = strtok(args_as_string, " ");
 
-    if (token == NULL)
-    {
+    if (token == NULL) {
         fprintf(stderr, "No arguments provided\n");
         exit(1);
     }
     // create an array of strings to store the arguments
     char **args = (char **)malloc(sizeof(char *));
-    int n = 0;         // number of arguments
-    args[n++] = token; // add the first argument
+    int n = 0;          // number of arguments
+    args[n++] = token;  // add the first argument
 
     // get the rest of the arguments
-    while (token != NULL)
-    {
-        token = strtok(NULL, " ");                               // get the next token (NULL - take the next token from the previous string)
-        args = (char **)realloc(args, (n + 1) * sizeof(char *)); // allocate memory for the new argument
-        args[n++] = token;                                       // add the new argument and increment the number of arguments
+    while (token != NULL) {
+        token = strtok(NULL, " ");                                       // get the next token (NULL - take the next token from the previous string)
+        char **temp = (char **)realloc(args, (n + 1) * sizeof(char *));  // allocate memory for the new argument
+        if (temp == NULL) {
+            free(args);
+            exit(EXIT_FAILURE);
+        }
+        args = temp;
+        args[n++] = token;  // add the new argument and increment the number of arguments
     }
 
     // fork and execute the program
     int fd = fork();
-    if (fd < 0)
-    { // fork failed
+    if (fd < 0) {  // fork failed
         fprintf(stderr, "Fork failed\n");
         exit(1);
     }
 
-    if (fd == 0)
-    { // child process
+    if (fd == 0) {  // child process
         execvp(args[0], args);
         fprintf(stderr, "Exec failed\n");
         free(args);
         exit(1);
-    }
-    else
-    {
-        wait(NULL); // wait for the child process to finish
+    } else {
+        wait(NULL);  // wait for the child process to finish
         // free the memory
         free(args);
         fflush(stdout);
     }
 }
 
-void sockets_terminator(int *descriptors)
-{
-    if (descriptors[0] != STDIN_FILENO)
-    {
+void sockets_terminator(int *descriptors) {
+    if (descriptors[0] != STDIN_FILENO) {
         close(descriptors[0]);
     }
-    if (descriptors[1] != STDOUT_FILENO)
-    {
+    if (descriptors[1] != STDOUT_FILENO) {
         close(descriptors[1]);
     }
 }
 
-void handle_alarm(int sig)
-{
-
+void handle_alarm(int sig) {
     // Terminate the process
     exit(0);
 }
 
 // sending the descriptor to handel, and the portnumber to open the server on
-void TCP_SERVER(int *descriptors, int port, char *b_flag)
-{
+void TCP_SERVER(int *descriptors, int port, char *b_flag) {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0)
-    {
+    if (sockfd < 0) {
         perror("socket");
         exit(EXIT_FAILURE);
     }
@@ -95,8 +85,7 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag)
 
     // allow the socket to be reused, maybe to change to fork?
     int optval = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1)
-    {
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
         perror("setsockopt");
         exit(EXIT_FAILURE);
     }
@@ -104,16 +93,14 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag)
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // listen to any address
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);  // listen to any address
 
-    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
+    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("bind");
         exit(EXIT_FAILURE);
     }
 
-    if (listen(sockfd, 1) < 0)
-    {
+    if (listen(sockfd, 1) < 0) {
         perror("listen");
         exit(EXIT_FAILURE);
     }
@@ -124,25 +111,21 @@ void TCP_SERVER(int *descriptors, int port, char *b_flag)
 
     // chanigng the input_fd to the new socket after accepting the connection
     int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
-    if (client_fd < 0)
-    {
+    if (client_fd < 0) {
         perror("accept");
         exit(EXIT_FAILURE);
     }
 
     descriptors[0] = client_fd;
-    if (b_flag != NULL)
-    {
+    if (b_flag != NULL) {
         descriptors[1] = client_fd;
     }
 }
 
-void TCP_client(int *descriptors, char *ip, int port)
-{
+void TCP_client(int *descriptors, char *ip, int port) {
     // open a TCP client to the server
     int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock == -1)
-    {
+    if (sock == -1) {
         perror("error creating socket");
         exit(1);
     }
@@ -154,35 +137,30 @@ void TCP_client(int *descriptors, char *ip, int port)
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
 
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0)
-    {
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0) {
         perror("setsockopt");
         exit(1);
     }
 
-    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0)
-    {
+    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
         perror("Invalid address/ Address not supported");
         exit(1);
     }
 
     // connecting to the server
-    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
+    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
         perror("error connecting to server");
         sockets_terminator(descriptors);
         exit(1);
     }
 
-    descriptors[1] = sock; // changing the output to form the socket to the client
+    descriptors[1] = sock;  // changing the output to form the socket to the client
 }
 
-void UDP_SERVER(int *descriptors, int port, int timeout)
-{
+void UDP_SERVER(int *descriptors, int port, int timeout) {
     // open a UDP server to listen to the port
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd == -1)
-    {
+    if (sockfd == -1) {
         perror("error creating socket");
         sockets_terminator(descriptors);
         exit(1);
@@ -191,8 +169,7 @@ void UDP_SERVER(int *descriptors, int port, int timeout)
 
     // if not set, the port will be in use for 2 minutes after the program ends
     int enable = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
-    {
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0) {
         perror("setsockopt failed");
         sockets_terminator(descriptors);
         exit(1);
@@ -203,8 +180,7 @@ void UDP_SERVER(int *descriptors, int port, int timeout)
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
+    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
         perror("error binding socket");
         sockets_terminator(descriptors);
         exit(1);
@@ -216,37 +192,31 @@ void UDP_SERVER(int *descriptors, int port, int timeout)
     socklen_t client_addr_len = sizeof(client_addr);
 
     int numbytes = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_addr_len);
-    if (numbytes == -1)
-    {
+    if (numbytes == -1) {
         perror("error receiving data");
         sockets_terminator(descriptors);
         exit(1);
     }
 
-    if (connect(sockfd, (struct sockaddr *)&client_addr, sizeof(client_addr)) == -1)
-    {
+    if (connect(sockfd, (struct sockaddr *)&client_addr, sizeof(client_addr)) == -1) {
         perror("error connecting to client");
         sockets_terminator(descriptors);
         exit(1);
     }
 
-    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
+    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
         perror("error sending ACK");
         exit(1);
     }
 
-    descriptors[0] = sockfd; // changing the descriptor to be the socket
+    descriptors[0] = sockfd;  // changing the descriptor to be the socket
     alarm(timeout);
 }
 
-void UDP_CLIENT(int *descriptors, char *ip, int port)
-{
-
+void UDP_CLIENT(int *descriptors, char *ip, int port) {
     // open a UDP client to the server
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd == -1)
-    {
+    if (sockfd == -1) {
         perror("error creating socket");
         exit(1);
     }
@@ -257,33 +227,28 @@ void UDP_CLIENT(int *descriptors, char *ip, int port)
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
 
-    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0)
-    {
+    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
         perror("Invalid address/ Address not supported");
         exit(1);
     }
 
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-    {
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
         perror("error creating socket");
         exit(EXIT_FAILURE);
     }
     printf(" the server ip is %s\n", ip);
     printf(" the server port is %d\n", port);
 
-    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
+    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
         perror("error connecting to server");
         exit(1);
     }
 
-    descriptors[1] = sockfd; // changing the output to be the socket
+    descriptors[1] = sockfd;  // changing the output to be the socket
 }
 
-int main(int argc, char *argv[])
-{
-    if (argc < 2)
-    {
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
         fprintf(stderr, "Usage: %s <port>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
@@ -295,44 +260,40 @@ int main(int argc, char *argv[])
     char *ovalue = NULL;
     char *tvalue = NULL;
 
-    while ((opt = getopt(argc, argv, "e:b:i:o:t:")) != -1)
-    {
-        switch (opt)
-        {
-        case 'e':
-            evalue = optarg;
-            break;
-        case 'b':
-            bvalue = optarg;
-            break;
-        case 'i':
-            ivalue = optarg;
-            break;
-        case 'o':
-            ovalue = optarg;
-            break;
-        case 't':
-            tvalue = optarg;
-            break;
-        default:
-            fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-            exit(EXIT_FAILURE);
+    while ((opt = getopt(argc, argv, "e:b:i:o:t:")) != -1) {
+        switch (opt) {
+            case 'e':
+                evalue = optarg;
+                break;
+            case 'b':
+                bvalue = optarg;
+                break;
+            case 'i':
+                ivalue = optarg;
+                break;
+            case 'o':
+                ovalue = optarg;
+                break;
+            case 't':
+                tvalue = optarg;
+                break;
+            default:
+                fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+                exit(EXIT_FAILURE);
         }
     }
 
-    if (tvalue != NULL)
-    {                                  // allowing  us to handle a problem with the CPU
-        signal(SIGALRM, handle_alarm); // sending a singal, and hadniling the alarm, instead of the CPU
+    if (tvalue != NULL) {               // allowing  us to handle a problem with the CPU
+        signal(SIGALRM, handle_alarm);  // sending a singal, and hadniling the alarm, instead of the CPU
         alarm(atoi(tvalue));
     }
 
     int descriptors[2];
-    descriptors[0] = STDIN_FILENO;  // input fd
-    descriptors[1] = STDOUT_FILENO; // output fd
+    descriptors[0] = STDIN_FILENO;   // input fd
+    descriptors[1] = STDOUT_FILENO;  // output fd
 
     // -b cannot be used with -i or -o, not support multiple options
-    if (bvalue != NULL && (ivalue != NULL || ovalue != NULL))
-    {
+    if (bvalue != NULL && (ivalue != NULL || ovalue != NULL)) {
         fprintf(stderr, "Option -b cannot be used with -i or -o\n");
         fprintf(stderr, "Usage: %s -e <value> [-b <value>] [-i <value>] [-o <value>]\n", argv[0]);
         exit(1);
@@ -343,168 +304,134 @@ int main(int argc, char *argv[])
     // int sock_input = STDIN_FILENO;
     // int sock_output = STDOUT_FILENO;
 
-    if (ivalue != NULL)
-    {
+    if (ivalue != NULL) {
         // -i TCPS<port> or UDPS<port>
         // Now need to decied if to open TCP server or UDP server
         // first need to check the demand
         printf("The i_value is: %s\n", ivalue);
-        if (strncmp(ivalue, "TCPS", 4) == 0)
-        {
+        if (strncmp(ivalue, "TCPS", 4) == 0) {
             ivalue += 4;
             int port = atoi(ivalue);
             TCP_SERVER(descriptors, port, NULL);
-        }
-        else if (strncmp(ivalue, "UDPS", 4) == 0)
-        {
+        } else if (strncmp(ivalue, "UDPS", 4) == 0) {
             ivalue += 4;
             int port = atoi(ivalue);
-            if (tvalue != NULL)
-            {
+            if (tvalue != NULL) {
                 UDP_SERVER(descriptors, port, atoi(tvalue));
-            }
-            else
-            {
+            } else {
                 UDP_SERVER(descriptors, port, 0);
             }
-        }
-        else
-        {
+        } else {
             fprintf(stderr, "i_value: Invalid server kind.\n");
             exit(1);
         }
     }
 
-    if (ovalue != NULL) // changin the output to the one who we're addressing
+    if (ovalue != NULL)  // changin the output to the one who we're addressing
     {
-
-        if (strncmp(ovalue, "TCPC", 4) == 0)
-        {
-            ovalue += 4; // skip the "TCPS" prefix
+        if (strncmp(ovalue, "TCPC", 4) == 0) {
+            ovalue += 4;  // skip the "TCPS" prefix
             char *ip_server = strtok(ovalue, ",");
             // getting the ip like in the example TCPC127.0.0.1,8080
-            if (ip_server == NULL)
-            {
+            if (ip_server == NULL) {
                 fprintf(stderr, "Invalid server IP\n");
                 sockets_terminator(descriptors);
                 exit(1);
             }
             // get the rest of the string after the comma, this is the port
             char *port_server = strtok(NULL, ",");
-            if (port_server == NULL)
-            {
+            if (port_server == NULL) {
                 fprintf(stderr, "Invalid server port\n");
                 sockets_terminator(descriptors);
                 exit(1);
             }
-            int port = atoi(port_server); // converting the port to integer
+            int port = atoi(port_server);  // converting the port to integer
             TCP_client(descriptors, ip_server, port);
-        }
-        else if (strncmp(ovalue, "UDPC", 4) == 0)
-        {
-            ovalue += 4; // skip the "UDPC" prefix
+        } else if (strncmp(ovalue, "UDPC", 4) == 0) {
+            ovalue += 4;  // skip the "UDPC" prefix
             char *ip_server = strtok(ovalue, ",");
-            if (ip_server == NULL)
-            {
+            if (ip_server == NULL) {
                 fprintf(stderr, "Invalid server IP\n");
                 sockets_terminator(descriptors);
                 exit(1);
             }
 
             char *port_server = strtok(NULL, ",");
-            if (port_server == NULL)
-            {
+            if (port_server == NULL) {
                 fprintf(stderr, "Invalid server port\n");
                 sockets_terminator(descriptors);
                 exit(1);
             }
-            int port = atoi(port_server); // converting the port to integer
+            int port = atoi(port_server);  // converting the port to integer
             UDP_CLIENT(descriptors, ip_server, port);
-        }
-        else
-        {
+        } else {
             fprintf(stderr, "o_value: Invalid server kind.\n");
             sockets_terminator(descriptors);
             exit(1);
         }
     }
 
-    if (bvalue != NULL) // changin the output to the one who we're addressing
+    if (bvalue != NULL)  // changin the output to the one who we're addressing
     {
-        if (strncmp(bvalue, "TCPS", 4) == 0)
-        {
-            bvalue += 4; // skip the "TCPS" prefix
+        if (strncmp(bvalue, "TCPS", 4) == 0) {
+            bvalue += 4;  // skip the "TCPS" prefix
             int port = atoi(bvalue);
             TCP_SERVER(descriptors, port, bvalue);
-        }
-        else if (strncmp(bvalue, "UDPS", 4) == 0)
-        {
-            bvalue += 4; // skip the "UDPS" prefix
+        } else if (strncmp(bvalue, "UDPS", 4) == 0) {
+            bvalue += 4;  // skip the "UDPS" prefix
             int port = atoi(bvalue);
-            UDP_SERVER(descriptors, port, 0); // sets descriptors[0] to the socket
-            descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
-        }
-        else
-        {
+            UDP_SERVER(descriptors, port, 0);  // sets descriptors[0] to the socket
+            descriptors[1] = descriptors[0];   // sets descriptors[1] to the socket
+        } else {
             fprintf(stderr, "b_value: Invalid server kind.\n");
             sockets_terminator(descriptors);
             exit(1);
         }
     }
 
-    if (evalue != NULL)
-    {
+    if (evalue != NULL) {
         // After finishinig changing the input and output, we're changing the input and output to the new socket
-        if (descriptors[0] != STDIN_FILENO)
-        {
-            if (dup2(descriptors[0], STDIN_FILENO) == -1)
-            {
+        if (descriptors[0] != STDIN_FILENO) {
+            if (dup2(descriptors[0], STDIN_FILENO) == -1) {
                 close(descriptors[0]);
-                if (descriptors[1] != STDOUT_FILENO)
-                {
+                if (descriptors[1] != STDOUT_FILENO) {
                     close(descriptors[1]);
                 }
                 perror("dup2 input");
                 exit(EXIT_FAILURE);
             }
         }
-        if (descriptors[1] != STDOUT_FILENO)
-        {
-            if (dup2(descriptors[1], STDOUT_FILENO) == -1)
-            {
+        if (descriptors[1] != STDOUT_FILENO) {
+            if (dup2(descriptors[1], STDOUT_FILENO) == -1) {
                 close(descriptors[1]);
-                if (descriptors[0] != STDIN_FILENO)
-                {
+                if (descriptors[0] != STDIN_FILENO) {
                     close(descriptors[0]);
                 }
                 perror("dup2 output");
                 exit(EXIT_FAILURE);
             }
         }
-        RUN(evalue); // this gets the whole command string and runs it
-    }
-    else //(evalue == NULL)
+        RUN(evalue);  // this gets the whole command string and runs it
+    } else            //(evalue == NULL)
     {
+        struct pollfd fds[4];  // poll file descriptors
+        int nfds = 4;          // number of file descriptors
 
-        struct pollfd fds[4]; // poll file descriptors
-        int nfds = 4;         // number of file descriptors
+        fds[0].fd = descriptors[0];  // stdin
+        fds[0].events = POLLIN;      // check for reading
 
-        fds[0].fd = descriptors[0]; // stdin
-        fds[0].events = POLLIN;     // check for reading
+        fds[1].fd = descriptors[1];  // input_fd
+        fds[1].events = POLLIN;      // check for reading
 
-        fds[1].fd = descriptors[1]; // input_fd
-        fds[1].events = POLLIN;     // check for reading
+        fds[2].fd = STDIN_FILENO;  // stdin
+        fds[2].events = POLLIN;    // check for reading
 
-        fds[2].fd = STDIN_FILENO; // stdin
-        fds[2].events = POLLIN;   // check for reading
+        fds[3].fd = STDOUT_FILENO;  // stdout
+        fds[3].events = POLLIN;     // check for reading
 
-        fds[3].fd = STDOUT_FILENO; // stdout
-        fds[3].events = POLLIN;    // check for reading
-
-        while (1)
-        {
-            int ret = poll(fds, nfds, -1); // wait indefinitely for an event
-            if (ret == -1)                 // poll failed
+        while (1) {
+            int ret = poll(fds, nfds, -1);  // wait indefinitely for an event
+            if (ret == -1)                  // poll failed
             {
                 perror("poll");
                 exit(EXIT_FAILURE);
@@ -512,21 +439,17 @@ int main(int argc, char *argv[])
 
             // in case b is null we know that the values in descriptors[0] and descriptors[1] are not the same
             // and in this case we will always read from descriptors[0] and write to descriptors[1].
-            if (bvalue == NULL && fds[0].revents & POLLIN)
-            {
+            if (bvalue == NULL && fds[0].revents & POLLIN) {
                 char buffer[1024];
-                int bytes_read = read(fds[0].fd, buffer, sizeof(buffer)); // read from the stdin
-                if (bytes_read == -1)
-                {
+                int bytes_read = read(fds[0].fd, buffer, sizeof(buffer));  // read from the stdin
+                if (bytes_read == -1) {
                     perror("read");
                     exit(EXIT_FAILURE);
                 }
-                if (bytes_read == 0)
-                {
+                if (bytes_read == 0) {
                     break;
                 }
-                if (write(fds[1].fd, buffer, bytes_read) == -1)
-                {
+                if (write(fds[1].fd, buffer, bytes_read) == -1) {
                     perror("write");
                     exit(EXIT_FAILURE);
                 }
@@ -535,40 +458,34 @@ int main(int argc, char *argv[])
             // in case b is not null we know that the values in descriptors[0] and descriptors[1] are the same
             // so we need to seperate in which case we are reading from stdin or from the input_fd
             // and write to stdout or to the output_fd
-            if (bvalue != NULL && fds[1].revents & POLLIN) // input_fd has data to read
+            if (bvalue != NULL && fds[1].revents & POLLIN)  // input_fd has data to read
             {
                 char buffer[1024];
-                int bytes_read = read(fds[1].fd, buffer, sizeof(buffer)); // read from the input_fd
-                if (bytes_read == -1)
-                {
+                int bytes_read = read(fds[1].fd, buffer, sizeof(buffer));  // read from the input_fd
+                if (bytes_read == -1) {
                     perror("read");
                     exit(EXIT_FAILURE);
                 }
-                if (bytes_read == 0)
-                {
+                if (bytes_read == 0) {
                     break;
                 }
-                if (write(fds[3].fd, buffer, bytes_read) == -1)
-                {
+                if (write(fds[3].fd, buffer, bytes_read) == -1) {
                     perror("write");
                     exit(EXIT_FAILURE);
                 }
             }
-            if (bvalue != NULL && fds[2].revents & POLLIN) // stdin has data to read
+            if (bvalue != NULL && fds[2].revents & POLLIN)  // stdin has data to read
             {
                 char buffer[1024];
-                int bytes_read = read(fds[2].fd, buffer, sizeof(buffer)); // read from stdin
-                if (bytes_read == -1)
-                {
+                int bytes_read = read(fds[2].fd, buffer, sizeof(buffer));  // read from stdin
+                if (bytes_read == -1) {
                     perror("read");
                     exit(EXIT_FAILURE);
                 }
-                if (bytes_read == 0)
-                {
+                if (bytes_read == 0) {
                     break;
                 }
-                if (write(descriptors[1], buffer, bytes_read) == -1)
-                {
+                if (write(descriptors[1], buffer, bytes_read) == -1) {
                     perror("write");
                     exit(EXIT_FAILURE);
                 }
