@@ -32,8 +32,15 @@ void RUN(char *args_as_string) {
     // get the rest of the arguments
     while (token != NULL) {
         token = strtok(NULL, " ");                                // get the next token (NULL - take the next token from the previous string)
-        args = (char **)realloc(args, (n + 1) * sizeof(char *));  // allocate memory for the new argument
-        args[n++] = token;                                        // add the new argument and increment the number of arguments
+        char **temp = (char **)realloc(args, (n + 1) * sizeof(char *));  // allocate memory for the new argument
+        if (temp == NULL) {
+            // Handle memory allocation failure
+            free(args);  // Free previously allocated memory
+            perror("Failed to reallocate memory");
+            exit(EXIT_FAILURE);  // Exit the program or handle the error appropriately
+        }
+        args = temp;  // Assign temp back to args if realloc succeeded
+        args[n++] = token;  // add the new argument and increment the number of arguments
     }
 
     // fork and execute the program
