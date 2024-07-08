@@ -1,0 +1,859 @@
+        -:    0:Source:mync.c
+        -:    0:Graph:mync.gcno
+        -:    0:Data:mync.gcda
+        -:    0:Runs:67
+        -:    1:#include <arpa/inet.h>
+        -:    2:#include <errno.h>
+        -:    3:#include <fcntl.h>
+        -:    4:#include <getopt.h>
+        -:    5:#include <netdb.h>
+        -:    6:#include <netinet/in.h>
+        -:    7:#include <poll.h>
+        -:    8:#include <signal.h>
+        -:    9:#include <stdio.h>
+        -:   10:#include <stdlib.h>
+        -:   11:#include <string.h>
+        -:   12:#include <sys/select.h>
+        -:   13:#include <sys/socket.h>
+        -:   14:#include <sys/types.h>
+        -:   15:#include <sys/un.h>
+        -:   16:#include <sys/wait.h>
+        -:   17:#include <unistd.h>
+        -:   18:
+       27:   19:void RUN(char *args_as_string) {
+        -:   20:    // tokenize the string - split by space
+       27:   21:    char *token = strtok(args_as_string, " ");
+        -:   22:
+       27:   23:    if (token == NULL) {
+    #####:   24:        fprintf(stderr, "No arguments provided\n");
+    #####:   25:        exit(1);
+        -:   26:    }
+        -:   27:    // create an array of strings to store the arguments
+       27:   28:    char **args = (char **)malloc(sizeof(char *));
+       27:   29:    int n = 0;          // number of arguments
+       27:   30:    args[n++] = token;  // add the first argument
+        -:   31:
+        -:   32:    // get the rest of the arguments
+       81:   33:    while (token != NULL) {
+       54:   34:        token = strtok(NULL, " ");                                       // get the next token (NULL - take the next token from the previous string)
+       54:   35:        char **temp = (char **)realloc(args, (n + 1) * sizeof(char *));  // allocate memory for the new argument
+       54:   36:        if (temp == NULL) {
+    #####:   37:            free(args);
+    #####:   38:            exit(EXIT_FAILURE);
+        -:   39:        }
+       54:   40:        args = temp;
+       54:   41:        args[n++] = token;  // add the new argument and increment the number of arguments
+        -:   42:    }
+        -:   43:
+        -:   44:    // fork and execute the program
+       27:   45:    int fd = fork();
+       54:   46:    if (fd < 0) {  // fork failed
+    #####:   47:        fprintf(stderr, "Fork failed\n");
+    #####:   48:        exit(1);
+        -:   49:    }
+        -:   50:
+       54:   51:    if (fd == 0) {  // child process
+       27:   52:        execvp(args[0], args);
+       27:   53:        fprintf(stderr, "Exec failed\n");
+    #####:   54:        free(args);
+    #####:   55:        exit(1);
+        -:   56:    } else {
+       27:   57:        wait(NULL);  // wait for the child process to finish
+        -:   58:        // free the memory
+       25:   59:        free(args);
+       25:   60:        fflush(stdout);
+        -:   61:    }
+       25:   62:}
+        -:   63:
+        2:   64:void sockets_terminator(int *descriptors) {
+        2:   65:    if (descriptors[0] != STDIN_FILENO) {
+        1:   66:        close(descriptors[0]);
+        -:   67:    }
+        2:   68:    if (descriptors[1] != STDOUT_FILENO) {
+    #####:   69:        close(descriptors[1]);
+        -:   70:    }
+        2:   71:}
+        -:   72:
+        5:   73:void handle_alarm(int sig) {
+        -:   74:    // Terminate the process
+        5:   75:    exit(1);
+        -:   76:}
+        -:   77:
+        -:   78:// sending the descriptor to handel, and the portnumber to open the server on
+        8:   79:void TCP_SERVER(int *descriptors, int port, char *b_flag, int flag) {
+        8:   80:    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        8:   81:    if (sockfd < 0) {
+    #####:   82:        perror("socket");
+    #####:   83:        sockets_terminator(descriptors);
+    #####:   84:        exit(EXIT_FAILURE);
+        -:   85:    }
+        8:   86:    printf("TCP socket created\n");
+        -:   87:
+        -:   88:    // allow the socket to be reused, maybe to change to fork?
+        8:   89:    int optval = 1;
+        8:   90:    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
+    #####:   91:        perror("setsockopt");
+    #####:   92:        close(sockfd);
+    #####:   93:        sockets_terminator(descriptors);
+    #####:   94:        exit(EXIT_FAILURE);
+        -:   95:    }
+        -:   96:
+        -:   97:    struct sockaddr_in server_addr;
+        8:   98:    server_addr.sin_family = AF_INET;
+        8:   99:    server_addr.sin_port = htons(port);
+        8:  100:    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);  // listen to any address
+        -:  101:
+        8:  102:    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    #####:  103:        perror("bind");
+    #####:  104:        close(sockfd);
+    #####:  105:        sockets_terminator(descriptors);
+    #####:  106:        exit(EXIT_FAILURE);
+        -:  107:    }
+        -:  108:
+        8:  109:    if (listen(sockfd, 1) < 0) {
+    #####:  110:        perror("listen");
+    #####:  111:        sockets_terminator(descriptors);
+    #####:  112:        exit(EXIT_FAILURE);
+        -:  113:    }
+        -:  114:
+        -:  115:    struct sockaddr_in client_addr;
+        8:  116:    socklen_t client_len = sizeof(client_addr);
+        -:  117:
+        -:  118:    // chanigng the input_fd to the new socket after accepting the connection
+        8:  119:    int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
+        8:  120:    if (client_fd < 0) {
+    #####:  121:        perror("accept");
+    #####:  122:        sockets_terminator(descriptors);
+    #####:  123:        exit(EXIT_FAILURE);
+        -:  124:    }
+        -:  125:
+        8:  126:    if (flag == 0) {
+        7:  127:        descriptors[0] = client_fd;
+        -:  128:    } else {
+        1:  129:        descriptors[1] = client_fd;
+        -:  130:    }
+        8:  131:    if (b_flag != NULL) {
+        2:  132:        descriptors[1] = client_fd;
+        -:  133:    }
+        8:  134:    close(sockfd);
+        8:  135:}
+        -:  136:
+        9:  137:void TCP_client(int *descriptors, char *ip, int port, char *bvalue, int flag) {
+        -:  138:    // open a TCP client to the server
+        9:  139:    int sock = socket(AF_INET, SOCK_STREAM, 0);
+        9:  140:    if (sock == -1) {
+    #####:  141:        perror("error creating socket");
+    #####:  142:        sockets_terminator(descriptors);
+    #####:  143:        exit(1);
+        -:  144:    }
+        -:  145:
+        9:  146:    printf("TCP client\n");
+        9:  147:    fflush(stdout);
+        -:  148:
+        -:  149:    struct sockaddr_in server_addr;
+        9:  150:    server_addr.sin_family = AF_INET;
+        9:  151:    server_addr.sin_port = htons(port);
+        -:  152:
+        9:  153:    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0) {
+    #####:  154:        perror("setsockopt");
+    #####:  155:        sockets_terminator(descriptors);
+    #####:  156:        exit(1);
+        -:  157:    }
+        -:  158:
+        9:  159:    if (strncmp(ip, "localhost", 9) == 0) {
+        1:  160:        ip = "127.0.0.1";
+        -:  161:    }
+        -:  162:
+        9:  163:    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
+    #####:  164:        perror("Invalid address/ Address not supported");
+    #####:  165:        sockets_terminator(descriptors);
+    #####:  166:        exit(1);
+        -:  167:    }
+        -:  168:
+        -:  169:    // connecting to the server
+        9:  170:    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+        1:  171:        perror("error connecting to server");
+        1:  172:        if (descriptors[0] != STDIN_FILENO)  // to ensure we'rent getting input from another place
+        -:  173:        {
+    #####:  174:            close(descriptors[0]);
+        -:  175:        }
+        1:  176:        sockets_terminator(descriptors);
+        1:  177:        exit(1);
+        -:  178:    }
+        -:  179:
+        8:  180:    if (flag == 0) {
+        7:  181:        descriptors[1] = sock;  // changing the output to form the socket to the client
+        -:  182:    } else {
+        1:  183:        descriptors[0] = sock;  // changing the input to form the socket to the client
+        -:  184:    }
+        -:  185:
+        8:  186:    if (bvalue != NULL) {
+        4:  187:        descriptors[0] = sock;  // changing the input to form the socket to the client
+        -:  188:    }
+        8:  189:}
+        -:  190:
+        5:  191:void UDP_SERVER(int *descriptors, int port, int timeout, int flag) {
+        -:  192:    // open a UDP server to listen to the port
+        5:  193:    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+        5:  194:    if (sockfd == -1) {
+    #####:  195:        perror("error creating socket");
+    #####:  196:        sockets_terminator(descriptors);
+    #####:  197:        exit(1);
+        -:  198:    }
+        5:  199:    printf("UDP Socket created\n");
+        -:  200:
+        -:  201:    // if not set, the port will be in use for 2 minutes after the program ends
+        5:  202:    int enable = 1;
+        5:  203:    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0) {
+    #####:  204:        perror("setsockopt failed");
+    #####:  205:        sockets_terminator(descriptors);
+    #####:  206:        exit(1);
+        -:  207:    }
+        -:  208:
+        -:  209:    struct sockaddr_in server_addr;
+        5:  210:    server_addr.sin_family = AF_INET;
+        5:  211:    server_addr.sin_port = htons(port);
+        5:  212:    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        -:  213:
+        5:  214:    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+    #####:  215:        perror("error binding socket");
+    #####:  216:        sockets_terminator(descriptors);
+    #####:  217:        exit(1);
+        -:  218:    }
+        -:  219:
+        -:  220:    // read the data from the client
+        -:  221:    char buffer[1024];
+        -:  222:    struct sockaddr_in client_addr;
+        5:  223:    socklen_t client_addr_len = sizeof(client_addr);
+        -:  224:
+        5:  225:    int numbytes = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_addr_len);
+        3:  226:    if (numbytes == -1) {
+    #####:  227:        perror("error receiving data");
+    #####:  228:        sockets_terminator(descriptors);
+    #####:  229:        exit(1);
+        -:  230:    }
+        -:  231:
+        3:  232:    if (connect(sockfd, (struct sockaddr *)&client_addr, sizeof(client_addr)) == -1) {
+    #####:  233:        perror("error connecting to client");
+    #####:  234:        sockets_terminator(descriptors);
+    #####:  235:        exit(1);
+        -:  236:    }
+        -:  237:
+        3:  238:    if (sendto(sockfd, "ACK", 3, 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+    #####:  239:        perror("error sending ACK");
+    #####:  240:        exit(1);
+        -:  241:    }
+        -:  242:
+        3:  243:    if (flag == 0) {
+        2:  244:        descriptors[0] = sockfd;  // changing the descriptor to be the socket
+        -:  245:    } else {
+        1:  246:        descriptors[1] = sockfd;  // changing the descriptor to be the socket
+        -:  247:    }
+        3:  248:    alarm(timeout);
+        3:  249:}
+        -:  250:
+        7:  251:void UDP_CLIENT(int *descriptors, char *ip, int port, int flag) {
+        -:  252:    // open a UDP client to the server
+        7:  253:    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+        7:  254:    if (sockfd == -1) {
+    #####:  255:        perror("error creating socket");
+    #####:  256:        exit(1);
+        -:  257:    }
+        7:  258:    printf("UDP client\n");
+        7:  259:    fflush(stdout);
+        -:  260:
+        -:  261:    struct sockaddr_in server_addr;
+        7:  262:    server_addr.sin_family = AF_INET;
+        7:  263:    server_addr.sin_port = htons(port);
+        -:  264:
+        7:  265:    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
+    #####:  266:        perror("Invalid address/ Address not supported");
+    #####:  267:        exit(1);
+        -:  268:    }
+        -:  269:
+        7:  270:    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+    #####:  271:        perror("error creating socket");
+    #####:  272:        exit(EXIT_FAILURE);
+        -:  273:    }
+        7:  274:    printf(" the server ip is %s\n", ip);
+        7:  275:    printf(" the server port is %d\n", port);
+        -:  276:
+        7:  277:    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+    #####:  278:        perror("error connecting to server");
+    #####:  279:        exit(1);
+        -:  280:    }
+        -:  281:
+        -:  282:    // Send a message to the server
+        7:  283:    char *message = "Lets play !\n";
+        7:  284:    if (sendto(sockfd, message, strlen(message), 0, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+    #####:  285:        perror("error sending message");
+    #####:  286:        exit(1);
+        -:  287:    }
+        -:  288:
+        7:  289:    if (flag == 0) {
+        5:  290:        descriptors[1] = sockfd;  // changing the output to be the socket
+        -:  291:    } else {
+        2:  292:        descriptors[0] = sockfd;  // changing the input to be the socket
+        -:  293:    }
+        7:  294:}
+        -:  295:
+        -:  296:// UNIX Domain Socket
+        3:  297:void UDS_SERVER_STREAM(char *path, int *descriptors) {
+        -:  298:    // opening a UDS server
+        3:  299:    int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);  // for stream like tcp protocol
+        3:  300:    if (sockfd == -1) {
+    #####:  301:        sockets_terminator(descriptors);
+    #####:  302:        perror("error creating socket");
+    #####:  303:        exit(1);
+        -:  304:    }
+        -:  305:
+        3:  306:    printf("1.UDS socket created\n");
+        -:  307:    struct sockaddr_un server_addr;      // creating the server address
+        3:  308:    server_addr.sun_family = AF_UNIX;    // setting the family to be UNIX
+        3:  309:    strcpy(server_addr.sun_path, path);  // setting the path to be the path we got from the input
+        -:  310:
+        -:  311:    // binding the socket to the server address
+        3:  312:    unlink(path);  // remove the file if it exists
+        3:  313:    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+    #####:  314:        perror("error binding socket");
+    #####:  315:        sockets_terminator(descriptors);
+    #####:  316:        exit(1);
+        -:  317:    }
+        -:  318:
+        3:  319:    printf("2.UDS binded\n");
+        -:  320:
+        -:  321:    // listening to incoming connections, we set it to be 1 connection at most.
+        3:  322:    if (listen(sockfd, 1) == -1) {
+    #####:  323:        perror("error listening");
+    #####:  324:        sockets_terminator(descriptors);
+    #####:  325:        exit(1);
+        -:  326:    }
+        -:  327:
+        3:  328:    printf("3.UDS listening\n");
+        -:  329:
+        -:  330:    // creating client struct to store the client address and accepting the connection
+        -:  331:    struct sockaddr_un client_addr;
+        3:  332:    socklen_t client_len = sizeof(client_addr);
+        -:  333:
+        3:  334:    int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
+        3:  335:    if (client_fd == -1) {
+    #####:  336:        perror("error accepting connection");
+    #####:  337:        sockets_terminator(descriptors);
+    #####:  338:        exit(1);
+        -:  339:    }
+        -:  340:
+        3:  341:    printf("4.UDS accepted\n");
+        -:  342:
+        3:  343:    descriptors[0] = client_fd;  // changing the input to be the socket
+        3:  344:}
+        -:  345:
+        -:  346:// UNIX Domain Socket
+        3:  347:void UDS_CLIENT_STREAM(char *path, int *descriptors) {
+        -:  348:    // open a UDS client to the server
+        3:  349:    int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+        3:  350:    if (sockfd == -1) {
+    #####:  351:        perror("error creating socket");
+    #####:  352:        sockets_terminator(descriptors);
+    #####:  353:        exit(1);
+        -:  354:    }
+        -:  355:
+        3:  356:    printf("UDS client\n");
+        3:  357:    fflush(stdout);
+        -:  358:
+        -:  359:    struct sockaddr_un server_addr;
+        3:  360:    server_addr.sun_family = AF_UNIX;
+        3:  361:    strcpy(server_addr.sun_path, path);
+        -:  362:
+        3:  363:    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+    #####:  364:        perror("error connecting to server");
+    #####:  365:        sockets_terminator(descriptors);
+    #####:  366:        exit(1);
+        -:  367:    }
+        -:  368:
+        3:  369:    descriptors[1] = sockfd;  // changing the output to be the socket
+        3:  370:}
+        -:  371:
+        -:  372:// // UNIX Domain Socket for datagram
+        -:  373:// void UDS_SERVER_DGRAM(char *path, int *descriptors) {
+        -:  374://     // opening a UDS server
+        -:  375://     int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);  // for datagram like udp protocol
+        -:  376://     if (sockfd == -1) {
+        -:  377://         perror("error creating socket");
+        -:  378://         sockets_terminator(descriptors);
+        -:  379://         exit(1);
+        -:  380://     }
+        -:  381:
+        -:  382://     printf("1.UDS socket created\n");
+        -:  383://     struct sockaddr_un server_addr;
+        -:  384://     server_addr.sun_family = AF_UNIX;
+        -:  385://     strcpy(server_addr.sun_path, path);
+        -:  386:
+        -:  387://     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+        -:  388://         perror("error binding socket");
+        -:  389://         sockets_terminator(descriptors);
+        -:  390://         exit(1);
+        -:  391://     }
+        -:  392:
+        -:  393://     printf("2.UDS binded\n");
+        -:  394:
+        -:  395://     struct sockaddr_un client_addr;
+        -:  396://     socklen_t client_len = sizeof(client_addr);
+        -:  397:
+        -:  398://     char buffer[1024];
+        -:  399://     int numbytes = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_len);
+        -:  400://     if (numbytes == -1) {
+        -:  401://         perror("error receiving data");
+        -:  402://         sockets_terminator(descriptors);
+        -:  403://         exit(1);
+        -:  404://     }
+        -:  405:
+        -:  406://     printf("3.UDS received data\n");
+        -:  407://     descriptors[0] = sockfd;  // changing the input to be the socket
+        -:  408:// }
+        -:  409:
+        -:  410:// // UNIX Domain Socket for datagram
+        -:  411:// void UDS_CLIENT_DGRAM(char *path, int *descriptors) {
+        -:  412://     // open a UDS client to the server
+        -:  413://     int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+        -:  414://     if (sockfd == -1) {
+        -:  415://         perror("error creating socket");
+        -:  416://         sockets_terminator(descriptors);
+        -:  417://         exit(1);
+        -:  418://     }
+        -:  419:
+        -:  420://     printf("UDS client\n");
+        -:  421://     fflush(stdout);
+        -:  422:
+        -:  423://     struct sockaddr_un server_addr;
+        -:  424://     server_addr.sun_family = AF_UNIX;
+        -:  425://     strcpy(server_addr.sun_path, path);
+        -:  426:
+        -:  427://     if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+        -:  428://         perror("error connecting to server");
+        -:  429://         sockets_terminator(descriptors);
+        -:  430://         exit(1);
+        -:  431://     }
+        -:  432:
+        -:  433://     descriptors[1] = sockfd;  // changing the output to be the socket
+        -:  434:// }
+        -:  435:
+       40:  436:int main(int argc, char *argv[]) {
+       40:  437:    if (argc < 2) {
+    #####:  438:        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+    #####:  439:        exit(EXIT_FAILURE);
+        -:  440:    }
+        -:  441:
+        -:  442:    int opt;
+       40:  443:    char *evalue = NULL;
+       40:  444:    char *bvalue = NULL;
+       40:  445:    char *ivalue = NULL;
+       40:  446:    char *ovalue = NULL;
+       40:  447:    char *tvalue = NULL;
+        -:  448:
+      120:  449:    while ((opt = getopt(argc, argv, "e:b:i:o:t:")) != -1) {
+       81:  450:        switch (opt) {
+       31:  451:            case 'e':
+       31:  452:                evalue = optarg;
+       31:  453:                break;
+       17:  454:            case 'b':
+       17:  455:                bvalue = optarg;
+       17:  456:                break;
+       16:  457:            case 'i':
+       16:  458:                ivalue = optarg;
+       16:  459:                break;
+        9:  460:            case 'o':
+        9:  461:                ovalue = optarg;
+        9:  462:                break;
+        7:  463:            case 't':
+        7:  464:                tvalue = optarg;
+        7:  465:                break;
+        1:  466:            default:
+        1:  467:                fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+        1:  468:                exit(EXIT_FAILURE);
+        -:  469:        }
+        -:  470:    }
+        -:  471:
+       39:  472:    if (tvalue != NULL) {
+        7:  473:        signal(SIGALRM, handle_alarm);
+        7:  474:        alarm(atoi(tvalue));
+        -:  475:    }
+        -:  476:
+        -:  477:    int descriptors[2];
+       39:  478:    descriptors[0] = STDIN_FILENO;   // input fd
+       39:  479:    descriptors[1] = STDOUT_FILENO;  // output fd
+        -:  480:
+        -:  481:    // -b cannot be used with -i or -o, not support multiple options
+       39:  482:    if (bvalue != NULL && (ivalue != NULL || ovalue != NULL)) {
+        1:  483:        fprintf(stderr, "Option -b cannot be used with -i or -o\n");
+        1:  484:        fprintf(stderr, "Usage: %s -e <value> [-b <value>] [-i <value>] [-o <value>]\n", argv[0]);
+        1:  485:        exit(1);
+        -:  486:    }
+        -:  487:
+        -:  488:    // by default, the input and output are from/to the terminal
+        -:  489:    // we will change it according to the socket input/output
+        -:  490:    // int sock_input = STDIN_FILENO;
+        -:  491:    // int sock_output = STDOUT_FILENO;
+        -:  492:
+       38:  493:    if (ivalue != NULL) {
+       13:  494:        printf("The i_value is: %s\n", ivalue);
+       13:  495:        if (strncmp(ivalue, "TCPS", 4) == 0) {
+        5:  496:            ivalue += 4;
+        5:  497:            int port = atoi(ivalue);
+        5:  498:            TCP_SERVER(descriptors, port, NULL, 0);
+        8:  499:        } else if (strncmp(ivalue, "UDPS", 4) == 0) {
+        1:  500:            ivalue += 4;
+        1:  501:            int port = atoi(ivalue);
+        1:  502:            if (tvalue != NULL) {
+    #####:  503:                UDP_SERVER(descriptors, port, atoi(tvalue), 0);
+        -:  504:            } else {
+        1:  505:                UDP_SERVER(descriptors, port, 0, 0);
+        -:  506:            }
+        7:  507:        } else if (strncmp(ivalue, "UDSSS", 5) == 0) {
+        1:  508:            ivalue += 5;  // skip the prefix to give the correct path.
+        1:  509:            printf("The path is: %s\n", ivalue);
+        1:  510:            UDS_SERVER_STREAM(ivalue, descriptors);
+        -:  511:        }
+        -:  512:
+        -:  513:        // else if (strncmp(ivalue, "UDSSD", 5) == 0) {
+        -:  514:        //     ivalue += 5;  // skip the prefix to give the correct path.
+        -:  515:        //     UDS_SERVER_DGRAM(ivalue, descriptors);
+        -:  516:        // }
+        -:  517:
+        -:  518:        // else if (strncmp(ivalue, "UDSCD", 5) == 0) {
+        -:  519:        //     ivalue += 5;  // skip the prefix to give the correct path.
+        -:  520:        //     UDS_CLIENT_DGRAM(ivalue, descriptors);
+        -:  521:        //     descriptors[0] = descriptors[1];
+        -:  522:        //     descriptors[1] = STDOUT_FILENO;
+        -:  523:        // }
+        -:  524:
+        6:  525:        else if (strncmp(ivalue, "UDSCS", 5) == 0) {
+        1:  526:            ivalue += 5;  // skip the prefix to give the correct path.
+        1:  527:            UDS_CLIENT_STREAM(ivalue, descriptors);
+        1:  528:            descriptors[0] = descriptors[1];
+        1:  529:            descriptors[1] = STDOUT_FILENO;
+        -:  530:        }
+        -:  531:
+        5:  532:        else if (strncmp(ivalue, "TCPC", 4) == 0) {
+        1:  533:            ivalue += 4;  // skip the "TCPS" prefix
+        1:  534:            char *ip_server = strtok(ivalue, ",");
+        -:  535:            // getting the ip like in the example TCPClocalhost,8080
+        1:  536:            if (ip_server == NULL) {
+    #####:  537:                fprintf(stderr, "Invalid server IP\n");
+    #####:  538:                sockets_terminator(descriptors);
+    #####:  539:                exit(1);
+        -:  540:            }
+        -:  541:            // get the rest of the string after the comma, this is the port
+        1:  542:            char *port_server = strtok(NULL, ",");
+        1:  543:            if (port_server == NULL) {
+    #####:  544:                fprintf(stderr, "Invalid server port\n");
+    #####:  545:                sockets_terminator(descriptors);
+    #####:  546:                exit(1);
+        -:  547:            }
+        1:  548:            int port = atoi(port_server);  // converting the port to integer
+        1:  549:            TCP_client(descriptors, ip_server, port, NULL, 1);
+        -:  550:        }
+        -:  551:
+        4:  552:        else if (strncmp(ivalue, "UDPC", 4) == 0) {
+        2:  553:            ivalue += 4;  // skip the "UDPC" prefix
+        2:  554:            char *ip_server = strtok(ivalue, ",");
+        2:  555:            if (ip_server == NULL) {
+    #####:  556:                fprintf(stderr, "Invalid server IP\n");
+    #####:  557:                sockets_terminator(descriptors);
+    #####:  558:                exit(1);
+        -:  559:            }
+        -:  560:
+        2:  561:            char *port_server = strtok(NULL, ",");
+        2:  562:            if (port_server == NULL) {
+    #####:  563:                fprintf(stderr, "Invalid server port\n");
+    #####:  564:                sockets_terminator(descriptors);
+    #####:  565:                exit(1);
+        -:  566:            }
+        2:  567:            int port = atoi(port_server);  // converting the port to integer
+        2:  568:            UDP_CLIENT(descriptors, ip_server, port, 1);
+        -:  569:        }
+        -:  570:
+        -:  571:        else {
+        2:  572:            fprintf(stderr, "i_value: Invalid input.\n");
+        2:  573:            exit(1);
+        -:  574:        }
+        -:  575:    }
+        -:  576:
+       36:  577:    if (ovalue != NULL) {  // changin the output to the one who we're addressing
+        -:  578:
+        9:  579:        if (strncmp(ovalue, "TCPC", 4) == 0) {
+        3:  580:            ovalue += 4;  // skip the "TCPS" prefix
+        3:  581:            char *ip_server = strtok(ovalue, ",");
+        -:  582:            // getting the ip like in the example TCPClocalhost,8080
+        3:  583:            if (ip_server == NULL) {
+    #####:  584:                fprintf(stderr, "Invalid server IP\n");
+    #####:  585:                sockets_terminator(descriptors);
+    #####:  586:                exit(1);
+        -:  587:            }
+        -:  588:            // get the rest of the string after the comma, this is the port
+        3:  589:            char *port_server = strtok(NULL, ",");
+        3:  590:            if (port_server == NULL) {
+    #####:  591:                fprintf(stderr, "Invalid server port\n");
+    #####:  592:                sockets_terminator(descriptors);
+    #####:  593:                exit(1);
+        -:  594:            }
+        3:  595:            int port = atoi(port_server);  // converting the port to integer
+        3:  596:            TCP_client(descriptors, ip_server, port, NULL, 0);
+        6:  597:        } else if (strncmp(ovalue, "UDPC", 4) == 0) {
+        1:  598:            ovalue += 4;  // skip the "UDPC" prefix
+        1:  599:            char *ip_server = strtok(ovalue, ",");
+        1:  600:            if (ip_server == NULL) {
+    #####:  601:                fprintf(stderr, "Invalid server IP\n");
+    #####:  602:                sockets_terminator(descriptors);
+    #####:  603:                exit(1);
+        -:  604:            }
+        -:  605:
+        1:  606:            char *port_server = strtok(NULL, ",");
+        1:  607:            if (port_server == NULL) {
+    #####:  608:                fprintf(stderr, "Invalid server port\n");
+    #####:  609:                sockets_terminator(descriptors);
+    #####:  610:                exit(1);
+        -:  611:            }
+        1:  612:            int port = atoi(port_server);  // converting the port to integer
+        1:  613:            UDP_CLIENT(descriptors, ip_server, port, 0);
+        -:  614:        }
+        -:  615:        // else if (strncmp(ovalue, "UDSCD", 5) == 0) {
+        -:  616:        //     // unix domain sockets - client - datacram connect to path.
+        -:  617:        //     ovalue += 5;  // skip the "UDSCD" prefix
+        -:  618:        //     UDS_CLIENT_DGRAM(ovalue, descriptors);
+        -:  619:        // }
+        5:  620:        else if (strncmp(ovalue, "UDSCS", 5) == 0) {
+        -:  621:            // unix domain sockets - client - stream connect to path.
+        1:  622:            ovalue += 5;  // skip the "UDSCS" prefix
+        1:  623:            UDS_CLIENT_STREAM(ovalue, descriptors);
+        -:  624:        }
+        -:  625:
+        4:  626:        else if (strncmp(ovalue, "TCPS", 4) == 0) {
+        1:  627:            ovalue += 4;  // skip the "TCPS" prefix
+        1:  628:            int port = atoi(ovalue);
+        1:  629:            TCP_SERVER(descriptors, port, NULL, 1);
+        3:  630:        } else if (strncmp(ovalue, "UDPS", 4) == 0) {
+        1:  631:            ovalue += 4;  // skip the "UDPS" prefix
+        1:  632:            int port = atoi(ovalue);
+        1:  633:            if (tvalue != NULL) {
+        1:  634:                UDP_SERVER(descriptors, port, atoi(tvalue), 1);
+        -:  635:            } else {
+    #####:  636:                UDP_SERVER(descriptors, port, 0, 1);
+        -:  637:            }
+        2:  638:        } else if (strncmp(ovalue, "UDSSS", 5) == 0) {
+        1:  639:            ovalue += 5;  // skip the "UDSSS" prefix
+        1:  640:            UDS_SERVER_STREAM(ovalue, descriptors);
+        1:  641:            descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
+        1:  642:            descriptors[0] = STDIN_FILENO;
+        -:  643:        }
+        -:  644:        // else if (strncmp(ovalue, "UDSSD", 5) == 0) {
+        -:  645:        //     ovalue += 5;  // skip the "UDSSD" prefix
+        -:  646:        //     UDS_SERVER_DGRAM(ovalue, descriptors);
+        -:  647:        //     descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
+        -:  648:        //     descriptors[0] = STDIN_FILENO;
+        -:  649:        // }
+        -:  650:
+        -:  651:        else {
+        1:  652:            fprintf(stderr, "o_value: Invalid server kind.\n");
+        1:  653:            sockets_terminator(descriptors);
+        1:  654:            exit(1);
+        -:  655:        }
+        -:  656:    }
+        -:  657:
+       35:  658:    if (bvalue != NULL)  // changin the output to the one who we're addressing
+        -:  659:    {
+       16:  660:        if (strncmp(bvalue, "TCPS", 4) == 0) {
+        2:  661:            bvalue += 4;  // skip the "TCPS" prefix
+        2:  662:            int port = atoi(bvalue);
+        2:  663:            TCP_SERVER(descriptors, port, bvalue, 0);
+       14:  664:        } else if (strncmp(bvalue, "TCPC", 4) == 0) {
+        5:  665:            bvalue += 4;  // skip the "TCPC" prefix
+        5:  666:            char *ip_server = strtok(bvalue, ",");
+        -:  667:            // getting the ip like in the example TCPClocalhost,8080
+        5:  668:            if (ip_server == NULL) {
+    #####:  669:                fprintf(stderr, "Invalid server IP\n");
+    #####:  670:                sockets_terminator(descriptors);
+    #####:  671:                exit(1);
+        -:  672:            }
+        -:  673:            // get the rest of the string after the comma, this is the port
+        5:  674:            char *port_server = strtok(NULL, ",");
+        5:  675:            if (port_server == NULL) {
+    #####:  676:                fprintf(stderr, "Invalid server port\n");
+    #####:  677:                sockets_terminator(descriptors);
+    #####:  678:                exit(1);
+        -:  679:            }
+        5:  680:            int port = atoi(port_server);  // converting the port to integer
+        5:  681:            TCP_client(descriptors, ip_server, port, bvalue, 0);
+        9:  682:        } else if (strncmp(bvalue, "UDPC", 4) == 0) {
+        4:  683:            bvalue += 4;  // skip the "UDPC" prefix
+        4:  684:            char *ip_server = strtok(bvalue, ",");
+        4:  685:            if (ip_server == NULL) {
+    #####:  686:                fprintf(stderr, "Invalid server IP\n");
+    #####:  687:                sockets_terminator(descriptors);
+    #####:  688:                exit(1);
+        -:  689:            }
+        -:  690:
+        4:  691:            char *port_server = strtok(NULL, ",");
+        4:  692:            if (port_server == NULL) {
+    #####:  693:                fprintf(stderr, "Invalid server port\n");
+    #####:  694:                sockets_terminator(descriptors);
+    #####:  695:                exit(1);
+        -:  696:            }
+        4:  697:            int port = atoi(port_server);  // converting the port to integer
+        4:  698:            UDP_CLIENT(descriptors, ip_server, port, 0);
+        4:  699:            descriptors[0] = descriptors[1];  // sets descriptors[0] to the socket
+        5:  700:        } else if (strncmp(bvalue, "UDPS", 4) == 0) {
+        3:  701:            bvalue += 4;  // skip the "UDPS" prefix
+        3:  702:            int port = atoi(bvalue);
+        3:  703:            UDP_SERVER(descriptors, port, 0, 0);  // sets descriptors[0] to the socket
+        1:  704:            descriptors[1] = descriptors[0];      // sets descriptors[1] to the socket
+        -:  705:        }
+        -:  706:        // else if (strncmp(bvalue, "UDSSD", 5) == 0)  // SERVER DATAGRAM
+        -:  707:        // {
+        -:  708:        //     bvalue += 5;  // skip the "UDSSD" prefix
+        -:  709:        //     UDS_SERVER_DGRAM(bvalue, descriptors);
+        -:  710:        //     descriptors[1] = descriptors[0];          // sets descriptors[1] to the socket
+        -:  711:        // }
+        2:  712:        else if (strncmp(bvalue, "UDSSS", 5) == 0)  // SERVER STREAM
+        -:  713:        {
+        1:  714:            bvalue += 5;  // skip the "UDSSS" prefix
+        1:  715:            UDS_SERVER_STREAM(bvalue, descriptors);
+        1:  716:            descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
+        -:  717:        }
+        -:  718:
+        1:  719:        else if (strncmp(bvalue, "UDSCS", 5) == 0) {
+        1:  720:            bvalue += 5;  // skip the "UDSCS" prefix
+        1:  721:            UDS_CLIENT_STREAM(bvalue, descriptors);
+        1:  722:            descriptors[0] = descriptors[1];  // sets descriptors[0] to the socket
+        -:  723:        }
+        -:  724:        // else if (strncmp(bvalue, "UDSCD", 5) == 0) {
+        -:  725:        //     bvalue += 5;  // skip the "UDSCD" prefix
+        -:  726:        //     UDS_CLIENT_DGRAM(bvalue, descriptors);
+        -:  727:        //     descriptors[0] = descriptors[1];  // sets descriptors[0] to the socket
+        -:  728:        // }
+        -:  729:
+        -:  730:        else {
+    #####:  731:            fprintf(stderr, "b_value: Invalid server kind.\n");
+    #####:  732:            sockets_terminator(descriptors);
+    #####:  733:            exit(1);
+        -:  734:        }
+        -:  735:    }
+        -:  736:
+       32:  737:    if (evalue != NULL) {
+        -:  738:        // After finishinig changing the input and output, we're changing the input and output to the new socket
+       27:  739:        if (descriptors[0] != STDIN_FILENO) {
+       18:  740:            if (dup2(descriptors[0], STDIN_FILENO) == -1) {
+    #####:  741:                close(descriptors[0]);
+    #####:  742:                if (descriptors[1] != STDOUT_FILENO) {
+    #####:  743:                    close(descriptors[1]);
+        -:  744:                }
+    #####:  745:                perror("dup2 input");
+    #####:  746:                sockets_terminator(descriptors);
+    #####:  747:                exit(EXIT_FAILURE);
+        -:  748:            }
+        -:  749:        }
+       27:  750:        if (descriptors[1] != STDOUT_FILENO) {
+       17:  751:            if (dup2(descriptors[1], STDOUT_FILENO) == -1) {
+    #####:  752:                close(descriptors[1]);
+    #####:  753:                if (descriptors[0] != STDIN_FILENO) {
+    #####:  754:                    close(descriptors[0]);
+        -:  755:                }
+    #####:  756:                perror("dup2 output");
+    #####:  757:                sockets_terminator(descriptors);
+    #####:  758:                exit(EXIT_FAILURE);
+        -:  759:            }
+        -:  760:        }
+       27:  761:        RUN(evalue);  // this gets the whole command string and runs it
+        -:  762:    } else            //(evalue == NULL)
+        -:  763:    {
+        5:  764:        printf("No -e command provided\n");
+        -:  765:        struct pollfd fds[4];  // poll file descriptors
+        5:  766:        int nfds = 4;          // number of file descriptors
+        -:  767:
+        5:  768:        fds[0].fd = descriptors[0];  // stdin
+        5:  769:        fds[0].events = POLLIN;      // check for reading
+        -:  770:
+        5:  771:        fds[1].fd = descriptors[1];  // input_fd
+        5:  772:        fds[1].events = POLLIN;      // check for reading
+        -:  773:
+        5:  774:        fds[2].fd = STDIN_FILENO;  // stdin
+        5:  775:        fds[2].events = POLLIN;    // check for reading
+        -:  776:
+        5:  777:        fds[3].fd = STDOUT_FILENO;  // stdout
+        5:  778:        fds[3].events = POLLIN;     // check for reading
+        -:  779:
+ 38463127:  780:        while (1) {
+ 38463132:  781:            int ret = poll(fds, nfds, -1);  // wait indefinitely for an event
+ 38463131:  782:            if (ret == -1)                  // poll failed
+        -:  783:            {
+    #####:  784:                perror("poll");
+    #####:  785:                sockets_terminator(descriptors);
+    #####:  786:                exit(EXIT_FAILURE);
+        -:  787:            }
+        -:  788:
+        -:  789:            // in case b is null we know that the values in descriptors[0] and descriptors[1] are not the same
+        -:  790:            // and in this case we will always read from descriptors[0] and write to descriptors[1].
+ 38463131:  791:            if (bvalue == NULL && fds[0].revents & POLLIN) {
+        -:  792:                char buffer[1024];
+       32:  793:                int bytes_read = read(fds[0].fd, buffer, sizeof(buffer));  // read from the stdin
+       32:  794:                if (bytes_read == -1) {
+    #####:  795:                    perror("read");
+    #####:  796:                    sockets_terminator(descriptors);
+    #####:  797:                    exit(EXIT_FAILURE);
+        -:  798:                }
+       32:  799:                if (bytes_read == 0) {
+        3:  800:                    break;
+        -:  801:                }
+       29:  802:                if (write(fds[1].fd, buffer, bytes_read) == -1) {
+    #####:  803:                    perror("write");
+    #####:  804:                    sockets_terminator(descriptors);
+    #####:  805:                    exit(EXIT_FAILURE);
+        -:  806:                }
+        -:  807:            }
+        -:  808:
+        -:  809:            // in case b is not null we know that the values in descriptors[0] and descriptors[1] are the same
+        -:  810:            // so we need to seperate in which case we are reading from stdin or from the input_fd
+        -:  811:            // and write to stdout or to the output_fd
+ 38463128:  812:            if (bvalue != NULL && fds[1].revents & POLLIN)  // input_fd has data to read
+        -:  813:            {
+        -:  814:                char buffer[1024];
+        8:  815:                int bytes_read = read(fds[1].fd, buffer, sizeof(buffer));  // read from the input_fd
+        8:  816:                if (bytes_read == -1) {
+    #####:  817:                    perror("read");
+    #####:  818:                    sockets_terminator(descriptors);
+    #####:  819:                    exit(EXIT_FAILURE);
+        -:  820:                }
+        8:  821:                if (bytes_read == 0) {
+        1:  822:                    break;
+        -:  823:                }
+        7:  824:                if (write(fds[3].fd, buffer, bytes_read) == -1) {
+    #####:  825:                    perror("write");
+    #####:  826:                    sockets_terminator(descriptors);
+    #####:  827:                    exit(EXIT_FAILURE);
+        -:  828:                }
+        -:  829:            }
+ 38463127:  830:            if (bvalue != NULL && fds[2].revents & POLLIN)  // stdin has data to read
+        -:  831:            {
+        -:  832:                char buffer[1024];
+        3:  833:                int bytes_read = read(fds[2].fd, buffer, sizeof(buffer));  // read from stdin
+        3:  834:                if (bytes_read == -1) {
+    #####:  835:                    perror("read");
+    #####:  836:                    sockets_terminator(descriptors);
+    #####:  837:                    exit(EXIT_FAILURE);
+        -:  838:                }
+        3:  839:                if (bytes_read == 0) {
+    #####:  840:                    break;
+        -:  841:                }
+        3:  842:                if (write(descriptors[1], buffer, bytes_read) == -1) {
+    #####:  843:                    perror("write");
+    #####:  844:                    sockets_terminator(descriptors);
+    #####:  845:                    exit(EXIT_FAILURE);
+        -:  846:                }
+        -:  847:            }
+        -:  848:        }
+        -:  849:    }
+        -:  850:
+       29:  851:    close(descriptors[0]);
+       29:  852:    close(descriptors[1]);
+        -:  853:
+       29:  854:    return 0;
+        -:  855:}
