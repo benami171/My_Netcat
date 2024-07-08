@@ -394,8 +394,10 @@ int main(int argc, char *argv[]) {
     }
 
     if (tvalue != NULL) {
-        signal(SIGALRM, handle_alarm);
-        alarm(atoi(tvalue));
+        signal(SIGALRM, handle_alarm);  // setting the signal handler to get alarm as its signal
+                                        // and handle it with the handle_alarm function
+        alarm(atoi(tvalue));            // setting a timer that when expired, sends a SIGALRM signal to the process,
+                                        // triggering the handle_alarm function.
     }
 
     int descriptors[2];
