@@ -16,30 +16,20 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-void RUN(char *args_as_string) {
-    // tokenize the string - split by space
-    char *token = strtok(args_as_string, " ");
 
-    if (token == NULL) {
+// gets a string like: "./ttt 123654789"
+void RUN(char *args_as_string) {
+
+    // tokenize the string - split by space
+    char *token = strtok(args_as_string, " "); // ./ttt
+    char *arguments = strtok(NULL, ""); // 123456789
+
+    if (token == NULL || arguments == NULL) {
         fprintf(stderr, "No arguments provided\n");
         exit(1);
     }
-    // create an array of strings to store the arguments
-    char **args = (char **)malloc(sizeof(char *));
-    int n = 0;          // number of arguments
-    args[n++] = token;  // add the first argument
 
-    // get the rest of the arguments
-    while (token != NULL) {
-        token = strtok(NULL, " ");                                       // get the next token (NULL - take the next token from the previous string)
-        char **temp = (char **)realloc(args, (n + 1) * sizeof(char *));  // allocate memory for the new argument
-        if (temp == NULL) {
-            free(args);
-            exit(EXIT_FAILURE);
-        }
-        args = temp;
-        args[n++] = token;  // add the new argument and increment the number of arguments
-    }
+    char *args[] = {token, arguments, NULL};
 
     // fork and execute the program
     int fd = fork();
@@ -51,16 +41,14 @@ void RUN(char *args_as_string) {
     if (fd == 0) {  // child process
         execvp(args[0], args);
         fprintf(stderr, "Exec failed\n");
-        free(args);
         exit(1);
     } else {
         wait(NULL);  // wait for the child process to finish
-        // free the memory
-        free(args);
         fflush(stdout);
     }
 }
 
+// called only when there was a problem throughout the program
 void sockets_terminator(int *descriptors) {
     if (descriptors[0] != STDIN_FILENO) {
         close(descriptors[0]);
@@ -369,70 +357,6 @@ void UDS_CLIENT_STREAM(char *path, int *descriptors) {
     descriptors[1] = sockfd;  // changing the output to be the socket
 }
 
-// // UNIX Domain Socket for datagram
-// void UDS_SERVER_DGRAM(char *path, int *descriptors) {
-//     // opening a UDS server
-//     int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);  // for datagram like udp protocol
-//     if (sockfd == -1) {
-//         perror("error creating socket");
-//         sockets_terminator(descriptors);
-//         exit(1);
-//     }
-
-//     printf("1.UDS socket created\n");
-//     struct sockaddr_un server_addr;
-//     server_addr.sun_family = AF_UNIX;
-//     strcpy(server_addr.sun_path, path);
-
-//     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
-//         perror("error binding socket");
-//         sockets_terminator(descriptors);
-//         exit(1);
-//     }
-
-//     printf("2.UDS binded\n");
-
-//     struct sockaddr_un client_addr;
-//     socklen_t client_len = sizeof(client_addr);
-
-//     char buffer[1024];
-//     int numbytes = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_len);
-//     if (numbytes == -1) {
-//         perror("error receiving data");
-//         sockets_terminator(descriptors);
-//         exit(1);
-//     }
-
-//     printf("3.UDS received data\n");
-//     descriptors[0] = sockfd;  // changing the input to be the socket
-// }
-
-// // UNIX Domain Socket for datagram
-// void UDS_CLIENT_DGRAM(char *path, int *descriptors) {
-//     // open a UDS client to the server
-//     int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
-//     if (sockfd == -1) {
-//         perror("error creating socket");
-//         sockets_terminator(descriptors);
-//         exit(1);
-//     }
-
-//     printf("UDS client\n");
-//     fflush(stdout);
-
-//     struct sockaddr_un server_addr;
-//     server_addr.sun_family = AF_UNIX;
-//     strcpy(server_addr.sun_path, path);
-
-//     if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
-//         perror("error connecting to server");
-//         sockets_terminator(descriptors);
-//         exit(1);
-//     }
-
-//     descriptors[1] = sockfd;  // changing the output to be the socket
-// }
-
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <port>\n", argv[0]);
@@ -485,11 +409,6 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // by default, the input and output are from/to the terminal
-    // we will change it according to the socket input/output
-    // int sock_input = STDIN_FILENO;
-    // int sock_output = STDOUT_FILENO;
-
     if (ivalue != NULL) {
         printf("The i_value is: %s\n", ivalue);
         if (strncmp(ivalue, "TCPS", 4) == 0) {
@@ -509,18 +428,6 @@ int main(int argc, char *argv[]) {
             printf("The path is: %s\n", ivalue);
             UDS_SERVER_STREAM(ivalue, descriptors);
         }
-
-        // else if (strncmp(ivalue, "UDSSD", 5) == 0) {
-        //     ivalue += 5;  // skip the prefix to give the correct path.
-        //     UDS_SERVER_DGRAM(ivalue, descriptors);
-        // }
-
-        // else if (strncmp(ivalue, "UDSCD", 5) == 0) {
-        //     ivalue += 5;  // skip the prefix to give the correct path.
-        //     UDS_CLIENT_DGRAM(ivalue, descriptors);
-        //     descriptors[0] = descriptors[1];
-        //     descriptors[1] = STDOUT_FILENO;
-        // }
 
         else if (strncmp(ivalue, "UDSCS", 5) == 0) {
             ivalue += 5;  // skip the prefix to give the correct path.
@@ -612,11 +519,7 @@ int main(int argc, char *argv[]) {
             int port = atoi(port_server);  // converting the port to integer
             UDP_CLIENT(descriptors, ip_server, port, 0);
         }
-        // else if (strncmp(ovalue, "UDSCD", 5) == 0) {
-        //     // unix domain sockets - client - datacram connect to path.
-        //     ovalue += 5;  // skip the "UDSCD" prefix
-        //     UDS_CLIENT_DGRAM(ovalue, descriptors);
-        // }
+
         else if (strncmp(ovalue, "UDSCS", 5) == 0) {
             // unix domain sockets - client - stream connect to path.
             ovalue += 5;  // skip the "UDSCS" prefix
@@ -641,12 +544,6 @@ int main(int argc, char *argv[]) {
             descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
             descriptors[0] = STDIN_FILENO;
         }
-        // else if (strncmp(ovalue, "UDSSD", 5) == 0) {
-        //     ovalue += 5;  // skip the "UDSSD" prefix
-        //     UDS_SERVER_DGRAM(ovalue, descriptors);
-        //     descriptors[1] = descriptors[0];  // sets descriptors[1] to the socket
-        //     descriptors[0] = STDIN_FILENO;
-        // }
 
         else {
             fprintf(stderr, "o_value: Invalid server kind.\n");
@@ -703,12 +600,7 @@ int main(int argc, char *argv[]) {
             UDP_SERVER(descriptors, port, 0, 0);  // sets descriptors[0] to the socket
             descriptors[1] = descriptors[0];      // sets descriptors[1] to the socket
         }
-        // else if (strncmp(bvalue, "UDSSD", 5) == 0)  // SERVER DATAGRAM
-        // {
-        //     bvalue += 5;  // skip the "UDSSD" prefix
-        //     UDS_SERVER_DGRAM(bvalue, descriptors);
-        //     descriptors[1] = descriptors[0];          // sets descriptors[1] to the socket
-        // }
+
         else if (strncmp(bvalue, "UDSSS", 5) == 0)  // SERVER STREAM
         {
             bvalue += 5;  // skip the "UDSSS" prefix
@@ -721,11 +613,6 @@ int main(int argc, char *argv[]) {
             UDS_CLIENT_STREAM(bvalue, descriptors);
             descriptors[0] = descriptors[1];  // sets descriptors[0] to the socket
         }
-        // else if (strncmp(bvalue, "UDSCD", 5) == 0) {
-        //     bvalue += 5;  // skip the "UDSCD" prefix
-        //     UDS_CLIENT_DGRAM(bvalue, descriptors);
-        //     descriptors[0] = descriptors[1];  // sets descriptors[0] to the socket
-        // }
 
         else {
             fprintf(stderr, "b_value: Invalid server kind.\n");
@@ -758,17 +645,18 @@ int main(int argc, char *argv[]) {
                 exit(EXIT_FAILURE);
             }
         }
+        printf("The e_value is: %s\n", evalue);
         RUN(evalue);  // this gets the whole command string and runs it
-    } else            //(evalue == NULL)
+    } else            // (evalue == NULL)
     {
         printf("No -e command provided\n");
         struct pollfd fds[4];  // poll file descriptors
         int nfds = 4;          // number of file descriptors
 
-        fds[0].fd = descriptors[0];  // stdin
+        fds[0].fd = descriptors[0];  // input_fd
         fds[0].events = POLLIN;      // check for reading
 
-        fds[1].fd = descriptors[1];  // input_fd
+        fds[1].fd = descriptors[1];  // output_fd
         fds[1].events = POLLIN;      // check for reading
 
         fds[2].fd = STDIN_FILENO;  // stdin
@@ -790,7 +678,7 @@ int main(int argc, char *argv[]) {
             // and in this case we will always read from descriptors[0] and write to descriptors[1].
             if (bvalue == NULL && fds[0].revents & POLLIN) {
                 char buffer[1024];
-                int bytes_read = read(fds[0].fd, buffer, sizeof(buffer));  // read from the stdin
+                int bytes_read = read(fds[0].fd, buffer, sizeof(buffer));  // read from the input_fd
                 if (bytes_read == -1) {
                     perror("read");
                     sockets_terminator(descriptors);
@@ -799,7 +687,7 @@ int main(int argc, char *argv[]) {
                 if (bytes_read == 0) {
                     break;
                 }
-                if (write(fds[1].fd, buffer, bytes_read) == -1) {
+                if (write(fds[1].fd, buffer, bytes_read) == -1) { // write to the output_fd
                     perror("write");
                     sockets_terminator(descriptors);
                     exit(EXIT_FAILURE);
@@ -809,10 +697,10 @@ int main(int argc, char *argv[]) {
             // in case b is not null we know that the values in descriptors[0] and descriptors[1] are the same
             // so we need to seperate in which case we are reading from stdin or from the input_fd
             // and write to stdout or to the output_fd
-            if (bvalue != NULL && fds[1].revents & POLLIN)  // input_fd has data to read
+            if (bvalue != NULL && fds[1].revents & POLLIN)  // output_fd has data to read
             {
                 char buffer[1024];
-                int bytes_read = read(fds[1].fd, buffer, sizeof(buffer));  // read from the input_fd
+                int bytes_read = read(fds[1].fd, buffer, sizeof(buffer));  // read from the output_fd
                 if (bytes_read == -1) {
                     perror("read");
                     sockets_terminator(descriptors);
