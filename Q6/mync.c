@@ -675,7 +675,7 @@ int main(int argc, char *argv[]) {
                 sockets_terminator(descriptors);
                 exit(EXIT_FAILURE);
             }
-
+            
             // in case b is null we know that the values in descriptors[0] and descriptors[1] are not the same
             // and in this case we will always read from descriptors[0] and write to descriptors[1].
             if (bvalue == NULL && fds[0].revents & POLLIN) {
