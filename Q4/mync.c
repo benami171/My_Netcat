@@ -175,6 +175,8 @@ void UDP_SERVER(int *descriptors, int port, int timeout) {
         exit(1);
     }
 
+
+    
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
